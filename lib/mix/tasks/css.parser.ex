@@ -26,7 +26,7 @@ defmodule Mix.Tasks.CSS.Parser do
 
     @!test 16px;
     
-  Will create a @!test variable usable throughout the following cssex file and imported files inside it through the syntax @::test, including inside <%= eex blocks %> declared in any of the outer or child templates.
+  Will create a @!test variable usable throughout the following cssex file and imported files inside it through the syntax @$$test, including inside <%= eex blocks %> declared in any of the outer or child templates.
 
  
   Placing a * after the @ character creates as well a normal css variable, this css variable due to CSS scoping has different nuances, but basically will, if declared at the top level of a parsing step (not inside any CSS identifier), create a variable in the :root element, otherwise, it will create a variable inside whatever CSS definition it's in, e.g.:
@@ -35,10 +35,10 @@ defmodule Mix.Tasks.CSS.Parser do
 
   .sample-div {
      @*!color blue;
-     color: @::color;
+     color: @$$color;
   }
 
-  p { color: @::color; }
+  p { color: @$$color; }
 
   Will generate:
 
@@ -59,10 +59,10 @@ defmodule Mix.Tasks.CSS.Parser do
 
     .sample-div {
        @*()color blue;
-       color: @::color;
+       color: @$$color;
     }
 
-    p { color: @::color; }
+    p { color: @$$color; }
 
   Will generate:
 
@@ -85,7 +85,7 @@ defmodule Mix.Tasks.CSS.Parser do
     %()variable same;
     %?variable same;
 
-  This is exactly the same as before but these variables are only available inside eex templates and can hold any elixir map, where each key has a value that is either another map or a binary_string. The values when strings needs to be delimited by quotes as normal elixir strings. To use them in an eex block you would do:
+  This is exactly the same as before but these variables are only available inside eex templates and can hold any elixir term, where each key has a value that is either another map or a binary_string. The values when strings needs to be delimited by quotes as normal elixir strings. To use them in an eex block you would do:
 
     %::variable_name
 
@@ -135,6 +135,6 @@ defmodule Mix.Tasks.CSS.Parser do
 
   When the final cssex parsing was done.
 
-  Using @::variable name inside a eex template does nothing, those variables will be replaced only after the eex evaluation. You can run any code inside an eex block, but it must return a String.t, or list of binaries, as those will be written as String.t(s) into the file before the final cssex expansion.
+  Using @$$variable name inside a eex template does nothing, those variables will be replaced only after the eex evaluation. You can run any code inside an eex block, but it must return a String.t, or list of binaries, as those will be written as String.t(s) into the file before the final cssex expansion.
   """
 end

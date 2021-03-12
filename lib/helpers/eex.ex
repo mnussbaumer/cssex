@@ -1,6 +1,6 @@
 defmodule CSSEx.Helpers.EEX do
 
-  @var_sub_regex ~r/(%::.*?)(?:\s|,)/mu
+  @var_sub_regex ~r/(%::.*?)(?:\s|,|\)|\])/mu
   
   import CSSEx.Helpers.Shared, only: [inc_col: 1, inc_col: 2, inc_line: 1]
   @line_terminators CSSEx.Helpers.LineTerminators.code_points()
@@ -37,7 +37,6 @@ defmodule CSSEx.Helpers.EEX do
 	  end
 	  
 	  line_correction = calc_line_offset(state, final)
-	  IO.inspect(line_correction)
 	{:ok, {final <> rem, %{data | line: line + line_correction}}}
     end
 

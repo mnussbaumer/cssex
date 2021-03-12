@@ -1,5 +1,5 @@
 defmodule CSSEx.Parser.Test do
-  use ExUnit.Case
+  use ExUnit.Case, async: true
   alias CSSEx.Parser
 
   @test_cases [
@@ -8,7 +8,7 @@ defmodule CSSEx.Parser.Test do
       """
       @!test 16px;
       
-      div { width: @::test; }
+      div { width: @$$test; }
       """,
       """
       div{width:16px;}
@@ -21,7 +21,7 @@ defmodule CSSEx.Parser.Test do
       @*!test 16px;
 
       div {
-         width: @::test;
+         width: @$$test;
       }
       """,
       [
@@ -39,7 +39,7 @@ defmodule CSSEx.Parser.Test do
       };
 
       """,
-      ""
+      "\n"
     },
 
     {
@@ -47,23 +47,23 @@ defmodule CSSEx.Parser.Test do
       """
       %!var %{
         test_1: %{
-	  "color" => "#ffffff",
-	  "background-color" => "#000000"
-	},
-	test_2: %{
-	  "color" => "#000000",
-	  "background-color" => "#ffffff"
+      	  "color" => "#ffffff",
+      	  "background-color" => "#000000"
+      	},
+      	test_2: %{
+      	  "color" => "#000000",
+      	  "background-color" => "#ffffff"
         }
       };
-
+      
       <%= for {key, val} <- %::var, reduce: "" do
         acc ->
           IO.iodata_to_binary(
-	    [acc, ".", \"\#{key}\", "{",
-	    (for {attr, value} <- val, reduce: [] do
-	      acc_2 -> [acc_2, attr, ":", value, ";"]
+      	    [acc, ".", \"\#{key}\", "{",
+      	    (for {attr, value} <- val, reduce: [] do
+      	      acc_2 -> [acc_2, attr, ":", value, ";"]
             end), 
-	  "}"])
+      	  "}"])
       end %>
       test }
       div { color: black; }
@@ -71,8 +71,31 @@ defmodule CSSEx.Parser.Test do
       [
 	".test_1{background-color:#000000;color:#ffffff;}",
 	".test_2{background-color:#ffffff;color:#000000;}",
-	"div{color:black;}"
+	"div{color:black;}",
+	[false, "test }"]
       ]
+    },
+
+    {
+      "interpolation works in attributes",
+      """
+      @!test px;
+      
+      div {
+        border: 2<$test$> solid red;
+      }
+      """,
+      "div{border:2px solid red;}\n"
+    },
+
+    {
+      "interpolation works in rules and other non-attributes",
+      """
+      @!test sm;
+      div.<$test$>{border:2px solid red;
+      }
+      """,
+      "div.sm{border:2px solid red;}\n"
     }
   ]
 
@@ -82,8 +105,9 @@ defmodule CSSEx.Parser.Test do
       [_|_] ->
 	test "parsing assertions ::: #{subtitle}" do
 	  assert {:ok, _, parsed} = Parser.parse(unquote(original))
-	  Enum.each(unquote(final_target), fn(match) ->
-	    assert parsed =~ match
+	  Enum.each(unquote(final_target), fn
+	    ([false, match]) -> refute parsed =~ match
+	    (match) -> assert parsed =~ match
 	  end)
 	end
       _ ->

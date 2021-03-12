@@ -1,0 +1,23 @@
+%!var %{
+  test_1: %{
+    "color" => "#ffffff",
+    "background-color" => "#000000"
+  },
+  test_2: %{
+    "color" => "#000000",
+    "background-color" => "#ffffff"
+  }
+};
+
+<%= for {key, val} <- %::var, reduce: "" do
+  acc ->
+    IO.iodata_to_binary(
+      [acc, ".", "#{key}", "{",
+      (for {attr, value} <- val, reduce: [] do
+      	   acc_2 -> [acc_2, attr, ":", value, ";"]
+       end), 
+      "}"])
+end %>
+
+  test }
+	div { color: black; }
