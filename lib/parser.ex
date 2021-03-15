@@ -16,6 +16,7 @@ defmodule CSSEx.Parser do
     :answer_to,
     :current_line,
     :current_column,
+    base_path: nil,
     file: nil,
     file_list: [],
     pass: 1,
@@ -39,7 +40,8 @@ defmodule CSSEx.Parser do
     prefix: nil,
     font_face: false,
     font_face_count: 0,
-    imports: []
+    imports: [],
+    dependencies: []
   ]
 
   @white_space CSSEx.Helpers.WhiteSpace.code_points()
@@ -53,9 +55,14 @@ defmodule CSSEx.Parser do
   {:ok, final_binary, term}
   {:error, term}
   """
-  def parse_file(file_path) do
+  def parse_file(base_path, file_path) do
     {:ok, pid} = __MODULE__.start_link()
-    :gen_statem.call(pid, {:start_file, file_path})
+    :gen_statem.call(pid, {:start_file, base_path, file_path})
+  end
+
+  def parse_file(%__MODULE__{} = data, base_path, file_path) do
+    {:ok, pid} = __MODULE__.start_link(data)
+    :gen_statem.call(pid, {:start_file, base_path, file_path})
   end
   
   @doc """
@@ -87,9 +94,9 @@ defmodule CSSEx.Parser do
     
   @impl :gen_statem
   def init(nil) do
-    table_ref = :ets.new(:base, [])
-    table_font_face_ref = :ets.new(:font_face, [])
-    table_keyframes_ref = :ets.new(:keyframes, [])
+    table_ref = :ets.new(:base, [:public])
+    table_font_face_ref = :ets.new(:font_face, [:public])
+    table_keyframes_ref = :ets.new(:keyframes, [:public])
     {:ok, :waiting, %__MODULE__{ets: table_ref, line: 0, column: 0, ets_fontface: table_font_face_ref, ets_keyframes: table_keyframes_ref}, [@timeout]}
   end
 
@@ -103,11 +110,20 @@ defmodule CSSEx.Parser do
     {:next_state, {:parse, :next},  new_data, [{:next_event, :internal, {:parse, content}}]}
   end
 
-  def handle_event({:call, from}, {:start_file, path}, :waiting, data) do
-    case File.read(path) do
-      {:ok, content} ->
-	new_data = %__MODULE__{data | answer_to: from, file: path, file_list: [path]}
-	{:next_state, {:parse, :next}, new_data, [{:next_event, :internal, {:parse, content}}]}
+  def handle_event({:call, from}, {:start_file, base_path, file_path}, :waiting, %{file_list: file_list} = data) do
+    path = Path.expand(file_path, base_path)
+    case path in file_list do
+      true ->
+	{:stop_and_reply, :normal, [{:reply, from, {:error, {:cyclic_reference, path, file_list}}}]}
+	
+      _ ->
+	case File.read(path) do
+	  {:ok, content} ->
+	    new_data = %__MODULE__{data | answer_to: from, file: path, file_list: [path | file_list], base_path: base_path}
+	    {:next_state, {:parse, :next}, new_data, [{:next_event, :internal, {:parse, content}}]}
+	  {:error, :enoent} -> {:stop_and_reply, :normal, [{:reply, from, {:error, {:enoent, path}}}]}
+	  
+	end
     end
   end
 
@@ -120,6 +136,19 @@ defmodule CSSEx.Parser do
       {:parse, :next} -> reply_finish(data)
       _ -> {:stop_and_reply, :normal, [{:reply, from, {:error, {state, data}}}]}
     end
+  end
+
+  def handle_event(:internal,
+    {:parse, <<"@include", rem::binary>>},
+    {:parse, :next},
+    data
+  ) do
+
+    new_data =
+      data
+      |> inc_col(8)
+
+    {:next_state, {:parse, :value, :include}, new_data, [{:next_event, :internal, {:parse, rem}}]}
   end
 
   def handle_event(:internal,
@@ -241,10 +270,9 @@ defmodule CSSEx.Parser do
   # TODO this will be wrong if we're on a current_key and this is part of a string, like div[data-json="{a: 1}"]
   def handle_event(:internal,
     {:parse, <<125, rem::binary>>},
-    {:parse, type} = state,
+    {:parse, :current_var} = state,
     data
-  ) when type in [:current_key, :current_var] do
-
+  ) do
     new_data =
       data
       |> add_warning(:missing, state)
@@ -254,14 +282,15 @@ defmodule CSSEx.Parser do
     {:next_state, {:parse, :next}, new_data, [{:next_event, :internal, {:parse, rem}}]}
   end
 
-  # we reached a closing bracket } while we were searching for a value to an attribute inside a previously opened block (we have a current chain), meaning there's no ; char, this is allowed on the last attr:val of a block, so we will do as if it was there and just reparse adding the ; to the beggining
+    # we reached a closing bracket } while we were searching for a value to an attribute inside a previously opened block (we have a current chain), meaning there's no ; char, this is allowed on the last attr:val of a block, so we will do as if it was there and just reparse adding the ; to the beggining
   def handle_event(:internal,
     {:parse, <<125, _::binary>> = full},
-    {:parse, _, _},
+    {:parse, :current_key},
     %{current_chain: [_|_]} = data
   ) do
     {:keep_state, data, [{:next_event, :internal, {:parse, <<";", full::binary>>}}]}
   end
+
 
   # we reached an eex opening tag, because it requires dedicated handling and parsing we move to a different parse step
   def handle_event(:internal,
@@ -317,7 +346,7 @@ defmodule CSSEx.Parser do
       {:parse, <<unquote(char), rem::binary>>},
       {:parse, :value, type},
       %{current_value: cval} = data
-    ) when type in [:media, :keyframes, :import], do: {
+    ) when type in [:media, :keyframes, :import, :include], do: {
       :keep_state,
       %{data | current_value: [cval | unquote(char)]},
       [{:next_event, :internal, {:parse, rem}}]
@@ -483,7 +512,6 @@ defmodule CSSEx.Parser do
   ) do
 
     ## TODO validate it's a valid selector, error if not
-    
     new_data =
       data
       |> add_current_selector()
@@ -513,7 +541,8 @@ defmodule CSSEx.Parser do
 
 	{:next_state, {:parse, :next}, new_data, [{:next_event, :internal, {:parse, new_rem}}]}
 	## TODO error needs to stop correctly
-      error -> error
+	error ->
+	stop_with_error(data, error)
     end
   end
 
@@ -523,7 +552,6 @@ defmodule CSSEx.Parser do
     {:parse, :value, :keyframes},
     data
   ) do
-
     # create a new ets table, public, so that the new started process can write to it
     inner_data = create_data_for_inner(data)
 
@@ -537,18 +565,9 @@ defmodule CSSEx.Parser do
 	
 	{:next_state, {:parse, :next}, new_data, [{:next_event, :internal, {:parse, new_rem}}]}
 	## TODO error needs to stop correctly
-      error -> error
+	error ->
+	stop_with_error(data, error)
     end
-  end
-
-  # we found the key separator : while searching for the :current_key, which means this is an attribute that we were parsing, add it and start searching for the next token which will be the value
-  def handle_event(:internal,
-    {:parse, <<?:, rem::binary>>},
-    {:parse, :current_key},
-    data
-  ) do
-    
-    {:next_state, {:parse, :value, :current_value}, inc_col(data), [{:next_event, :internal, {:parse, rem}}]}
   end
 
   # we found a non-white-space/line-end char while searching for the next token, which means it's a regular css rule start, prepare for parsing it
@@ -566,14 +585,39 @@ defmodule CSSEx.Parser do
     
     {:next_state, {:parse, :current_key}, new_data, [{:next_event, :internal, {:parse, rem}}]}
   end
- 
 
-  # we're accumulating on something, add the value to that type we're accumulating
+  # we reached the termination ; char while assembling an include statement, start a new parser with the current ets table
   def handle_event(:internal,
-    {:parse, <<char, rem::binary>>},
-    {:parse, type},
-    data
-  ), do: {:keep_state, Map.put(data, type, [Map.fetch!(data, type), char]), [{:next_event, :internal, {:parse, rem}}]}
+    {:parse, <<?;, rem::binary>>},
+    {:parse, :value, :include},
+    %{current_value: current_key, ets: ets, base_path: base_path} = data
+  ) do
+
+    file_path =
+      current_key
+      |> IO.iodata_to_binary()
+      |> String.replace(~r/\"?/, "")
+      |> String.trim()
+    
+    inner_data = create_data_for_inner(data, ets)
+
+    case __MODULE__.parse_file(inner_data, base_path, file_path) do
+      {:finished, %{file: file} = new_inner_data} ->
+	new_data = (
+	  data
+	  |> merge_inner_data(new_inner_data)
+	  |> reset_current()
+	  |> add_to_dependencies(file)
+	  |> merge_dependencies(new_inner_data)
+	)
+	
+	{:next_state, {:parse, :next}, new_data, [{:next_event, :internal, {:parse, rem}}]}
+	# TODO error needs to stop correctly
+	error ->
+	stop_with_error(data, error)
+    end
+  end
+ 
 
   # we reached the termination ; char while assembling a variable, cleanup and add it to the correct scopes
   def handle_event(:internal,
@@ -600,6 +644,32 @@ defmodule CSSEx.Parser do
   # we reached the termination ; char while assembling an attribute, cleanup and add it to the correct ets slot
   def handle_event(:internal,
     {:parse, <<?;, rem::binary>>},
+    {:parse, :current_key},
+    %{current_key: current_key} = data
+  ) do
+    
+    [key, val] =
+      current_key
+      |> IO.iodata_to_binary()
+      |> String.split(":", parts: 2)
+
+    ckey = String.trim(key);
+    cval = String.trim(val)
+    
+    ## TODO add checks on attribute & value, emit warnings if invalid;
+    
+    new_data =
+      data
+      |> add_to_attributes(ckey, cval)
+      |> reset_current()
+      |> inc_col()
+      |> first_rule()
+
+    {:next_state, {:parse, :next}, new_data, [{:next_event, :internal, {:parse, rem}}]}
+  end
+  
+  def handle_event(:internal,
+    {:parse, <<?;, rem::binary>>},
     {:parse, :value, :current_value},
     %{current_key: current_key, current_value: current_value} = data
   ) do
@@ -618,6 +688,13 @@ defmodule CSSEx.Parser do
 
     {:next_state, {:parse, :next}, new_data, [{:next_event, :internal, {:parse, rem}}]}
   end
+
+  # we're accumulating on something, add the value to that type we're accumulating
+  def handle_event(:internal,
+    {:parse, <<char, rem::binary>>},
+    {:parse, type},
+    data
+  ), do: {:keep_state, Map.put(data, type, [Map.fetch!(data, type), char]), [{:next_event, :internal, {:parse, rem}}]}
 
   # we reached the termination ; char while assembling a special attribute, @charset, cleanup and verify it's valid to add
   def handle_event(:internal,
@@ -857,11 +934,12 @@ defmodule CSSEx.Parser do
       |> maybe_replace_val(data)
 
     %{data | imports: [imports | ["@import", " ", cval, ";"]]}
+    |> add_to_dependencies(cval)
   end
 
   def validate_import(%{first_rule: false, line: line, column: col, warnings: warnings} = data) do
 
-    %{data | warnings: :lists.flatten([warnings | "@import declarations must be at the top level of a file, with exception of the @charset declaration that comes always first if present l:#{line} c:#{col}"])}
+    %{data | warnings: ["@import declarations must be at the top level of a file, with exception of the @charset declaration that comes always first if present l:#{line} c:#{col}" | warnings]}
   end
   
   def first_rule(%{first_rule: false} = data), do: data
@@ -879,6 +957,14 @@ defmodule CSSEx.Parser do
       :stop_and_reply,
       :normal,
       [{:reply, from, {:ok, data, IO.iodata_to_binary([final_css, "\n"])}}]
+    }
+  end
+
+  def reply_finish(%{answer_to: from} = data) do
+    {
+      :stop_and_reply,
+      :normal,
+      [{:reply, from, {:finished, data}}]
     }
   end
 
@@ -1032,7 +1118,41 @@ defmodule CSSEx.Parser do
     }
   end
 
+  def merge_inner_data(
+    %{warnings: existing_warnings, scope: existing_scope, assigns: existing_assigns} = data,
+    %{line: line, column: col, warnings: warnings, media: media, scope: scope, assigns: assigns, valid?: valid?, font_face_count: ffc}
+  ) do
+
+    %__MODULE__{
+      data |
+      valid?: valid?, font_face_count: ffc,
+      line: line, column: col, warnings: :lists.concat([existing_warnings, warnings]),
+      scope: Map.merge(existing_scope, scope),
+      assigns: Map.merge(existing_assigns, assigns),
+      media: media
+    }
+  end
+
+  def merge_dependencies(%{dependencies: deps} = data, %__MODULE__{dependencies: new_deps}), do: %{data | dependencies: Enum.concat(deps, new_deps)}
+
+  def add_to_dependencies(%{dependencies: deps} = data, val),
+    do: %{data | dependencies: [val | deps]}
+
+  def stop_with_error(
+    %{line: line, column: column, answer_to: from} = data,
+    {:error, {:enoent, _} = error}
+  ) do
+    
+    error_msg = msg_error(error, line, column)
+    new_data = %{data | valid?: false, error: error_msg}
+
+    {:stop_and_reply, new_data, [{:reply, from, new_data}]}
+  end
+
   def add_error(%{line: line, column: column} = data, error) do
     %{data | valid?: false, error: "#{error} :: l:#{line} c:#{column}"}
   end
+
+  def msg_error({:enoent, file_path}, line, column),
+    do: "unable to open file: #{file_path} ::: l:#{line} c:#{column}"
 end

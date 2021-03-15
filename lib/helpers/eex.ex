@@ -24,21 +24,17 @@ defmodule CSSEx.Helpers.EEX do
     matches =
       Regex.scan(@var_sub_regex, acc, capture: :all_but_first)
       |> :lists.flatten()
+
+    bindings = Enum.map(Map.merge(assigns, local_assigns), fn({k, v}) -> {String.to_atom(k), v} end)
+
+    final =
+      case EEx.eval_string(acc, [assigns: bindings]) do
+	replaced when is_binary(replaced) -> replaced
+	iodata when is_list(iodata) -> IO.iodata_to_binary(iodata)
+      end
     
-    case replace_and_extract_assigns(acc, matches, data) do
-	
-      {:error, error} -> {:error, add_error(data, error)}
-      
-      {final_block, bindings} ->
-	final =
-	  case EEx.eval_string(final_block, [assigns: bindings]) do
-	    replaced when is_binary(replaced) -> replaced
-	    iodata when is_list(iodata) -> IO.iodata_to_binary(iodata)
-	  end
-	  
-	  line_correction = calc_line_offset(state, final)
-	{:ok, {final <> rem, %{data | line: line + line_correction}}}
-    end
+    line_correction = calc_line_offset(state, final)
+    {:ok, {final <> rem, %{data | line: line + line_correction}}}
 
   rescue error ->
     description =

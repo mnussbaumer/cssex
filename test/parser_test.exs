@@ -8,7 +8,7 @@ defmodule CSSEx.Parser.Test do
       """
       @!test 16px;
       
-      div { width: @$$test; }
+      div { width: <$test$>; }
       """,
       """
       div{width:16px;}
@@ -21,7 +21,7 @@ defmodule CSSEx.Parser.Test do
       @*!test 16px;
 
       div {
-         width: @$$test;
+         width: <$test$>;
       }
       """,
       [
@@ -56,7 +56,7 @@ defmodule CSSEx.Parser.Test do
         }
       };
       
-      <%= for {key, val} <- %::var, reduce: "" do
+      <%= for {key, val} <- @var, reduce: "" do
         acc ->
           IO.iodata_to_binary(
       	    [acc, ".", \"\#{key}\", "{",
@@ -65,14 +65,13 @@ defmodule CSSEx.Parser.Test do
             end), 
       	  "}"])
       end %>
-      test }
+
       div { color: black; }
       """,
       [
 	".test_1{background-color:#000000;color:#ffffff;}",
 	".test_2{background-color:#ffffff;color:#000000;}",
-	"div{color:black;}",
-	[false, "test }"]
+	"div{color:black;}"
       ]
     },
 
