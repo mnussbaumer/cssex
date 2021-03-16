@@ -21,6 +21,8 @@ defmodule CSSEx.Ampersand.Test do
   """
 
   test "basic & works" do
-    assert {:ok, _, "div.test{color:blue;}div .test{color:green;}div{color:red;}div.test.another-one{color:black;font-family:sans-serif;}\n"} = Parser.parse(@basic)
+    assert {:ok, _,
+            "div.test{color:blue;}div .test{color:green;}div{color:red;}div.test.another-one{color:black;font-family:sans-serif;}\n"} =
+             Parser.parse(@basic)
   end
 end

@@ -28,21 +28,22 @@ defmodule CSSEx.Media.Test do
     }
   }
   """
-  
-  test "nested media generates the correct css rules and doesn't generate a media query nested into a selector" do
 
+  test "nested media generates the correct css rules and doesn't generate a media query nested into a selector" do
     assert {:ok, _, parsed} = Parser.parse(@base_nested)
-    
+
     [
       "@media screen and (max-width:600px){.test{font-family:Arial;background-color:black;}.test div.example{display:none;}}\n",
-      ".test{color:red;}",
+      ".test{color:red;}"
     ]
-    |> Enum.each(fn(verification) ->
+    |> Enum.each(fn verification ->
       assert parsed =~ verification
     end)
   end
 
   test "replacement of variables inside media works correctly" do
-    assert {:ok, _, "@media print and (max-width:565px and min-width:300px), (min-width:565px){.test{color:blue;}}\n"} = Parser.parse(@vars_in_media_declaration)
+    assert {:ok, _,
+            "@media print and (max-width:565px and min-width:300px), (min-width:565px){.test{color:blue;}}\n"} =
+             Parser.parse(@vars_in_media_declaration)
   end
 end

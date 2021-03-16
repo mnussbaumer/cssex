@@ -11,6 +11,7 @@ defmodule CSSEx.Helpers.Shared do
   def generate_prefix(%{current_chain: cc, prefix: prefix}), do: prefix ++ cc
 
   def ampersand_join(initial), do: ampersand_join(initial, [])
+
   def ampersand_join([head, <<"&", rem::binary>> | t], acc),
     do: ampersand_join([head <> rem | t], acc)
 

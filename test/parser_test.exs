@@ -7,14 +7,13 @@ defmodule CSSEx.Parser.Test do
       "basic variable replacement",
       """
       @!test 16px;
-      
+
       div { width: <$test$>; }
       """,
       """
       div{width:16px;}
       """
     },
-
     {
       "variable replacement and root placing of css var",
       """
@@ -25,11 +24,10 @@ defmodule CSSEx.Parser.Test do
       }
       """,
       [
-	"div{width:16px;}",
-	":root{--test:16px;}"
+        "div{width:16px;}",
+        ":root{--test:16px;}"
       ]
     },
-
     {
       "assigns work correctly",
       """
@@ -41,7 +39,6 @@ defmodule CSSEx.Parser.Test do
       """,
       "\n"
     },
-
     {
       "assigns can be used in eex blocks",
       """
@@ -55,7 +52,7 @@ defmodule CSSEx.Parser.Test do
       	  "background-color" => "#ffffff"
         }
       };
-      
+
       <%= for {key, val} <- @var, reduce: "" do
         acc ->
           IO.iodata_to_binary(
@@ -69,24 +66,22 @@ defmodule CSSEx.Parser.Test do
       div { color: black; }
       """,
       [
-	".test_1{background-color:#000000;color:#ffffff;}",
-	".test_2{background-color:#ffffff;color:#000000;}",
-	"div{color:black;}"
+        ".test_1{background-color:#000000;color:#ffffff;}",
+        ".test_2{background-color:#ffffff;color:#000000;}",
+        "div{color:black;}"
       ]
     },
-
     {
       "interpolation works in attributes",
       """
       @!test px;
-      
+
       div {
         border: 2<$test$> solid red;
       }
       """,
       "div{border:2px solid red;}\n"
     },
-
     {
       "interpolation works in rules and other non-attributes",
       """
@@ -98,21 +93,22 @@ defmodule CSSEx.Parser.Test do
     }
   ]
 
-
-  Enum.each(@test_cases, fn({subtitle, original, final_target}) ->
+  Enum.each(@test_cases, fn {subtitle, original, final_target} ->
     case final_target do
-      [_|_] ->
-	test "parsing assertions ::: #{subtitle}" do
-	  assert {:ok, _, parsed} = Parser.parse(unquote(original))
-	  Enum.each(unquote(final_target), fn
-	    ([false, match]) -> refute parsed =~ match
-	    (match) -> assert parsed =~ match
-	  end)
-	end
+      [_ | _] ->
+        test "parsing assertions ::: #{subtitle}" do
+          assert {:ok, _, parsed} = Parser.parse(unquote(original))
+
+          Enum.each(unquote(final_target), fn
+            [false, match] -> refute parsed =~ match
+            match -> assert parsed =~ match
+          end)
+        end
+
       _ ->
-	test "parsing assertions #{subtitle}" do
-	  assert {:ok, _, unquote(final_target)} = Parser.parse(unquote(original))
-	end
+        test "parsing assertions #{subtitle}" do
+          assert {:ok, _, unquote(final_target)} = Parser.parse(unquote(original))
+        end
     end
   end)
 end
