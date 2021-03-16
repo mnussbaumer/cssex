@@ -180,12 +180,12 @@ div { background-color: white; color: orange; }
 
 The final output for `div` will always have the attributes in their declaration order:
 ```css
-div { color: green; background-color: white, color: orange}
+div { color: green; background-color: white, color: orange; }
 ```
 
 But the position of this `div` selector in the final CSS is non deterministic. It means it could end up:
 ```css
-div { color: green; background-color: white, color: orange}
+div { color: green; background-color: white, color: orange; }
 .sample { color: red; }
 ```
 
@@ -193,7 +193,7 @@ Or
 
 ```css
 .sample { color: red; }
-div { color: green; background-color: white, color: orange}
+div { color: green; background-color: white, color: orange; }
 ```
 This doesn't affect the CSS ruling though as that is defined by the selectors specificity and the attributes ordering, in this case `div` would always have its attribute `color` end up as being `orange` and never `green`.
 
