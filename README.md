@@ -330,7 +330,7 @@ Additional things that depend on interest are:
 
 ## About
 
-![Cocktail Logo](https://github.com/mnussbaumer/workforce/blob/master/logo/cocktail_logo.png?raw=true "Cocktail Logo")
+![Cocktail Logo](https://github.com/mnussbaumer/cssex/blob/master/logo/cocktail_logo.png?raw=true "Cocktail Logo")
 
 [© rooster image in the cocktail logo](https://commons.wikimedia.org/wiki/User:LadyofHats)
 
