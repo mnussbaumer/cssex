@@ -4,13 +4,13 @@ A small pre-processing extension language for CSS written in Elixir.
 Its main purpose is to provide a native Elixir pre-processor for CSS, in the vein of Sass/Scss.
 
 <div align="center">
-     <a href="#functionality">Functionality |</a> 
-     <a href="#caveats">Caveats |</a>
-     <a href="#installation">Installation |</a>
-     <a href="#usage">Usage |</a>
-     <a href="#motivation">Motivation |</a>
-     <a href="#roadmap">Roadmap |</a>
-     <a href="#about">About |</a>
+     <a href="#functionality">Functionality</a><p>|</p>
+     <a href="#caveats">Caveats</a><p>|</p>
+     <a href="#installation">Installation</a><p>|</p>
+     <a href="#usage">Usage</a><p>|</p>
+     <a href="#motivation">Motivation</a><p>|</p>
+     <a href="#roadmap">Roadmap</a><p>|</p>
+     <a href="#about">About</a><p>|</p>
      <a href="#copyright">Copyright</a>
 </div>
 
