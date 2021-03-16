@@ -3,18 +3,20 @@
 A small pre-processing extension language for CSS written in Elixir.
 Its main purpose is to provide a native Elixir pre-processor for CSS, in the vein of Sass/Scss.
 
-<div style="display: flex; flex-flow: row wrap; text-align: center;">
-     <a href="#functionality" style="margin: 10px 5px;">Functionality</a>
-     <a href="#caveats" style="margin: 10px 5px;">Caveats</a>
-     <a href="#installation" style="margin: 10px 5px;">Installation</a>
-     <a href="#usage" style="margin: 10px 5px;">Usage</a>
-     <a href="#motivation" style="margin: 10px 5px;">Motivation</a>
-     <a href="#roadmap" style="margin: 10px 5px;">Roadmap</a>
-     <a href="#about" style="margin: 10px 5px;">About</a>
-     <a href="#copyright" style="margin: 10px 5px;">Copyright</a>
+<div align="center">
+     <a href="#functionality">Functionality |</a> 
+     <a href="#caveats">Caveats |</a>
+     <a href="#installation">Installation |</a>
+     <a href="#usage">Usage |</a>
+     <a href="#motivation">Motivation |</a>
+     <a href="#roadmap">Roadmap |</a>
+     <a href="#about">About |</a>
+     <a href="#copyright">Copyright</a>
 </div>
 
+
 <div id="functionality"></div>
+
 #### Functionality:
 
 
@@ -157,6 +159,7 @@ An EEx block has to return either a binary (a String.t) or an iodata list. When 
 
 
 <div id="caveats"></div>
+
 ##### Caveats
 
 Due to the way it parses and builds output the final CSS files avoid a lot of repetition. It doesn't parse and insert the parsed result in place, instead it builds a table of selectors -> attributes and while parsing rules adds them to that selector. The order of the attributes for a selector is guaranteed, but the final layout of the selectors themselves is not.
@@ -205,6 +208,7 @@ all regular selectors and their rules
 
 
 <div id="installation"></div>
+
 ### Installation
 
 This is an early and still incomplete release of this library, as of now it's not available in [hex.pm](https://hex.pm), it will be once the remaining baseline functionality is added ([roadmap](#roadmap)).
@@ -221,6 +225,7 @@ end
 ```
 
 <div id="usage"></div>
+
 ### Usage
 
 To use it, add to your `dev.exs` configuration file:
@@ -267,6 +272,7 @@ This will define an entry point file of `priv/static/cssex/base.cssex` which wil
 The file watcher still needs some work, if you add the entry point without the file being existing it will crash (and log) and you'll need to restart the server, but a better strategy will be implemented in the future releases, the directory of the failed file will be set under watch and resume once the file appears.
 
 <div id="motivation"></div>
+
 ### Motivation
 
 I can't remember when I wrote pure CSS stylesheets without Sass/SCSS and I think they cover very well for the limitations CSS has (due to being something the browser needs to parse). It allows scaffolding entire themes and utility functions and write much more organised and intelligible CSS (the downsides are found in CSS as well, lack of organisation leads to style contamination, etc, but what it allows to do better is a net gain).
@@ -284,6 +290,7 @@ The chosen architecture lends itself very well also to integrate additional func
 In terms of speed, although I haven't done extensive benchmarking as I want first to finish the basic roadmap, seems to be faster than dart-sass in small files in a significant way - not sure how it plays out with bigger files - but looks promising.
 
 <div id="roadmap"></div>
+
 ### Roadmap
 
 - Implement custom functions definition that cascade through the files as right now variables and assigns do. Still thinking on the syntax, probably something like:
@@ -315,6 +322,7 @@ Additional things that depend on interest are:
 - being able to wrap the whole thing in a downloadable package for use even without Erlang&Elixir installed or for projects not using Elixir - this is trickier as it would require ERTS to be shipped with the package - libsass+node-sass and dart+sass hover around 5mb unpacked each - a release+erts can probably be slimmed down but never to these values
 
 <div id="about"></div>
+
 ### About
 
 ![Cocktail Logo](https://github.com/mnussbaumer/workforce/blob/master/logo/cocktail_logo.png?raw=true "Cocktail Logo")
@@ -322,6 +330,7 @@ Additional things that depend on interest are:
 [© rooster image in the cocktail logo](https://commons.wikimedia.org/wiki/User:LadyofHats)
 
 <div id="copyright"></div>
+
 ### Copyright
 
 ```
