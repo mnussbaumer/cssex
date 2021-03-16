@@ -4,7 +4,16 @@ defmodule CSSEx.Helpers.LineTerminators do
   https://en.wikipedia.org/wiki/Newline#Unicode
   """
 
-  @line_terminators_unicode ["\u000A", "\u000B", "\u000C", "\u000D", "\u000D\u000A", "\u0085", "\u2028", "\u2029"]
-  
+  @line_terminators_unicode [
+    "\u000A",
+    "\u000B",
+    "\u000C",
+    "\u000D",
+    "\u000D\u000A",
+    "\u0085",
+    "\u2028",
+    "\u2029"
+  ]
+
   def code_points(), do: @line_terminators_unicode
 end
