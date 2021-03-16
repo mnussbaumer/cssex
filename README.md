@@ -200,15 +200,15 @@ This doesn't affect the CSS ruling though as that is defined by the selectors sp
 The only exceptions are special CSS rules, which will appear in the following order always.
 
 `@charset`
-<\br>
+<br>
 `@import`s
-<\br>
+<br>
 **all regular selectors and their rules**
-<\br>
+<br>
 `@font-face`s
-<\br>
+<br>
 `@media`s
-<\br>
+<br>
 `@keyframes`'
 
 
