@@ -17,10 +17,10 @@ Its main purpose is to provide a native Elixir pre-processor for CSS, in the vei
 
 <div id="functionality"></div>
 
-#### Functionality:
+### Functionality:
 
 
-##### Variables
+#### Variables
 
 ```css
 @!a_variable red;
@@ -32,7 +32,7 @@ div {
 }
 ```
 
-###### into
+##### into
 
 ```css
 div {
@@ -42,7 +42,7 @@ div {
 ```
 
 
-##### Variables that create CSS variables on declaration
+#### Variables that create CSS variables on declaration
 
 ```css
 @*!primary red;
@@ -50,7 +50,7 @@ div {
 div { color: <$primary$>; }
 ```
 
-###### into
+##### into
 
 ```css
 :root {
@@ -60,9 +60,9 @@ div { color: <$primary$>; }
 div { color: red; }
 ```
 
-##### Scoped Variables by file and set only if undefined variables 
+#### Scoped Variables by file and set only if undefined variables 
 
-###### file_1.cssex
+##### file_1.cssex
 ```css
 @!scope_variable_1 20px;
 @!scope_variable_2 blue;
@@ -77,7 +77,7 @@ div { font-size: <$scope_variable_1$>; }
 }
 ```
 
-###### file_2.cssex
+##### file_2.cssex
 
 ```css
 @()scope_variable_1 16px;
@@ -91,7 +91,7 @@ div { font-size: <$scope_variable_1$>; }
 @include file_3.cssex;
 ```
 
-###### file_3.cssex
+##### file_3.cssex
 
 ```css
 @?scope_variable_1 12px;
@@ -103,7 +103,7 @@ div { font-size: <$scope_variable_1$>; }
 }
 ```
 
-###### into
+##### into
 
 ```css
 div { font-size: 20px; }
@@ -125,7 +125,7 @@ div { font-size: 20px; }
 
 These scope ruling might still be changed regarding the scoped workings and the undefined versions. Variables are inserted always using the interpolation markers, `<$ variable_name $>`.
 
-##### Assigns
+#### Assigns
 
 Assigns are as if variables and they have the same options and scoping as that of variables, but instead of being `@!`, `@*!`, `@()` and `@?`, they're identified by `%!`, `%()` and `%?`.
 They can hold any valid elixir term and are only availble inside EEx blocks.
@@ -146,7 +146,7 @@ They can hold any valid elixir term and are only availble inside EEx blocks.
 end %>
 ```
 
-###### into
+##### into
 
 ```css
 .btn-primary { background-color: red; }
@@ -160,7 +160,7 @@ An EEx block has to return either a binary (a String.t) or an iodata list. When 
 
 <div id="caveats"></div>
 
-##### Caveats
+### Caveats
 
 Due to the way it parses and builds output the final CSS files avoid a lot of repetition. It doesn't parse and insert the parsed result in place, instead it builds a table of selectors -> attributes and while parsing rules adds them to that selector. The order of the attributes for a selector is guaranteed, but the final layout of the selectors themselves is not.
 
@@ -209,7 +209,7 @@ all regular selectors and their rules
 
 <div id="installation"></div>
 
-### Installation
+## Installation
 
 This is an early and still incomplete release of this library, as of now it's not available in [hex.pm](https://hex.pm), it will be once the remaining baseline functionality is added ([roadmap](#roadmap)).
 
@@ -226,7 +226,7 @@ end
 
 <div id="usage"></div>
 
-### Usage
+## Usage
 
 To use it, add to your `dev.exs` configuration file:
 
@@ -268,12 +268,12 @@ end
 
 This will define an entry point file of `priv/static/cssex/base.cssex` which will output its parsed content into `priv/static/css/base.css`.
 
-##### NOTE
+### NOTE
 The file watcher still needs some work, if you add the entry point without the file being existing it will crash (and log) and you'll need to restart the server, but a better strategy will be implemented in the future releases, the directory of the failed file will be set under watch and resume once the file appears.
 
 <div id="motivation"></div>
 
-### Motivation
+## Motivation
 
 I can't remember when I wrote pure CSS stylesheets without Sass/SCSS and I think they cover very well for the limitations CSS has (due to being something the browser needs to parse). It allows scaffolding entire themes and utility functions and write much more organised and intelligible CSS (the downsides are found in CSS as well, lack of organisation leads to style contamination, etc, but what it allows to do better is a net gain).
 
@@ -291,7 +291,7 @@ In terms of speed, although I haven't done extensive benchmarking as I want firs
 
 <div id="roadmap"></div>
 
-### Roadmap
+## Roadmap
 
 - Implement custom functions definition that cascade through the files as right now variables and assigns do. Still thinking on the syntax, probably something like:
 
@@ -323,7 +323,7 @@ Additional things that depend on interest are:
 
 <div id="about"></div>
 
-### About
+## About
 
 ![Cocktail Logo](https://github.com/mnussbaumer/workforce/blob/master/logo/cocktail_logo.png?raw=true "Cocktail Logo")
 
@@ -331,7 +331,7 @@ Additional things that depend on interest are:
 
 <div id="copyright"></div>
 
-### Copyright
+## Copyright
 
 ```
 Copyright [2021-∞] [Micael Nussbaumer]
