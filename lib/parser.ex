@@ -14,8 +14,8 @@ defmodule CSSEx.Parser do
     :column,
     :error,
     :answer_to,
-    :current_line,
-    :current_column,
+    current_line: 1,
+    current_column: 1,
     base_path: nil,
     file: nil,
     file_list: [],
@@ -41,7 +41,8 @@ defmodule CSSEx.Parser do
     font_face: false,
     font_face_count: 0,
     imports: [],
-    dependencies: []
+    dependencies: [],
+    search_acc: ""
   ]
 
   @white_space CSSEx.Helpers.WhiteSpace.code_points()
@@ -106,8 +107,8 @@ defmodule CSSEx.Parser do
     {:ok, :waiting,
      %__MODULE__{
        ets: table_ref,
-       line: 0,
-       column: 0,
+       line: 1,
+       column: 1,
        ets_fontface: table_font_face_ref,
        ets_keyframes: table_keyframes_ref
      }, [@timeout]}
@@ -166,6 +167,60 @@ defmodule CSSEx.Parser do
       {:parse, :next} -> reply_finish(data)
       _ -> {:stop_and_reply, :normal, [{:reply, from, {:error, {state, data}}}]}
     end
+  end
+
+  Enum.each([{"]", "["}, {")", "("}, {?", ?"}, {"'", "'"}], fn({char, opening}) ->
+    def handle_event(
+      :internal,
+      {:parse, <<unquote(char), rem::binary>>},
+      {:find_terminator, unquote(opening), [], state},
+      %{search_acc: acc} = data
+    ) do
+
+      new_data =
+	%{data | search_acc: [acc, unquote(char)]}
+	|> close_current()
+      
+      {:next_state, {:after_terminator, state}, new_data, [{:next_event, :internal, {:terminate, rem}}]}
+    end
+
+    def handle_event(
+      :internal,
+      {:parse, <<unquote(char), rem::binary>>},
+      {:find_terminator, unquote(opening), [next_search | old_search], state},
+      %{search_acc: acc} = data
+    ) do
+      new_data =
+	%{data | search_acc: [acc, unquote(char)]}
+	|> close_current()
+      
+      {:next_state, {:find_terminator, next_search, old_search, state}, new_data, [{:next_event, :internal, {:parse, rem}}]}
+    end
+  end)
+
+  Enum.each(["[", "(", ?", "'"], fn(char) ->
+    def handle_event(
+      :internal,
+      {:parse, <<unquote(char), rem::binary>>},
+      state,
+      %{search_acc: acc} = data
+    ) do
+      
+      new_data =
+	%{data | search_acc: [acc, unquote(char)]}
+	|> open_current({:terminator, unquote(char))
+
+      case state do
+	{:find_terminator, prev_search, old_search, old_state} ->
+	  {:next_state, {:find_terminator, unquote(char), [prev_search | old_search], old_state}, new_data, [{:next_event, :internal, {:parse, rem}}]}
+	_ ->
+	  {:next_state, {:find_terminator, unquote(char), [], state}, new_data, [{:next_event, :internal, {:parse, rem}}]}
+      end
+    end
+  end)
+
+  def handle_event(:internal, {:parse, <<char::binary-size(1), rem::binary>>}, {:find_terminator, _, _, _}, %{search_acc: acc} = data) do
+    {:keep_state, %{data | search_acc: [acc, char]}, [{:next_event, :internal, {:parse, rem}}]}
   end
 
   def handle_event(
@@ -739,6 +794,31 @@ defmodule CSSEx.Parser do
     {:next_state, {:parse, :next}, new_data, [{:next_event, :internal, {:parse, rem}}]}
   end
 
+  def handle_event(
+    :internal,
+    {:terminate, rem},
+    {:after_terminator, {:parse, type} = next},
+    %{search_acc: acc} = data
+  ) do
+
+    new_data =
+      %{data | search_acc: ""}
+      |> Map.put(type, [Map.fetch!(data, type), acc])
+    
+    {:next_state, next, new_data, [{:next_event, :internal, {:parse, rem}}]}
+  end
+
+  def handle_event(
+    :internal,
+    {:terminate, rem},
+    {:after_terminator, {:parse, :value, _type} = next},
+    %{search_acc: acc, current_value: cval} = data
+  ) do
+    new_data = %{data | search_acc: "", current_value: [cval, acc]}
+    
+    {:next_state, next, new_data, [{:next_event, :internal, {:parse, rem}}]}
+  end
+
   # we're accumulating on something, add the value to that type we're accumulating
   def handle_event(
         :internal,
@@ -1251,8 +1331,6 @@ defmodule CSSEx.Parser do
   def merge_inner_data(
         %{warnings: existing_warnings, scope: existing_scope, assigns: existing_assigns} = data,
         %{
-          line: line,
-          column: col,
           warnings: warnings,
           media: media,
           scope: scope,
@@ -1265,8 +1343,6 @@ defmodule CSSEx.Parser do
       data
       | valid?: valid?,
         font_face_count: ffc,
-        line: line,
-        column: col,
         warnings: :lists.concat([existing_warnings, warnings]),
         scope: Map.merge(existing_scope, scope),
         assigns: Map.merge(existing_assigns, assigns),
