@@ -14,8 +14,7 @@ defmodule CSSEx.Parser do
     :column,
     :error,
     :answer_to,
-    current_line: 1,
-    current_column: 1,
+    current_reg: [],
     base_path: nil,
     file: nil,
     file_list: [],
@@ -58,7 +57,8 @@ defmodule CSSEx.Parser do
 
   Additionally a %__MODULE__{} struct with prefilled details can be passed as the first argument in which case the parser will use it as its configuration. This is used internally when parsing @include statements in order to propagate the parent assigns and scope, but can also be used to pass assigns or scope that don't live on the cssex files, or keep ownership of the rules ETS table upon finishing in case iterating through all final css rules is desired.
   """
-  @spec parse_file(path :: String.t, file_path :: String.t) :: {:ok, %__MODULE__{}, String.t} | {:error, term}
+  @spec parse_file(path :: String.t(), file_path :: String.t()) ::
+          {:ok, %__MODULE__{}, String.t()} | {:error, term}
   def parse_file(base_path, file_path) do
     {:ok, pid} = __MODULE__.start_link()
     :gen_statem.call(pid, {:start_file, base_path, file_path})
@@ -165,62 +165,93 @@ defmodule CSSEx.Parser do
   def handle_event(:internal, {:parse, ""}, state, %{answer_to: from} = data) do
     case state do
       {:parse, :next} -> reply_finish(data)
-      _ -> {:stop_and_reply, :normal, [{:reply, from, {:error, {state, data}}}]}
+      _ -> {:stop_and_reply, :normal, [{:reply, from, {:error, {state, add_error(data)}}}]}
     end
   end
 
-  Enum.each([{"]", "["}, {")", "("}, {?", ?"}, {"'", "'"}], fn({char, opening}) ->
+  Enum.each([{"]", "["}, {")", "("}, {?", ?"}, {"'", "'"}], fn {char, opening} ->
     def handle_event(
-      :internal,
-      {:parse, <<unquote(char), rem::binary>>},
-      {:find_terminator, unquote(opening), [], state},
-      %{search_acc: acc} = data
-    ) do
-
+          :internal,
+          {:parse, <<unquote(char), rem::binary>>},
+          {:find_terminator, unquote(opening), [], state},
+          %{search_acc: acc} = data
+        ) do
       new_data =
-	%{data | search_acc: [acc, unquote(char)]}
-	|> close_current()
-      
-      {:next_state, {:after_terminator, state}, new_data, [{:next_event, :internal, {:terminate, rem}}]}
+        %{data | search_acc: [acc, unquote(char)]}
+        |> close_current()
+        |> inc_col(1)
+
+      {:next_state, {:after_terminator, state}, new_data,
+       [{:next_event, :internal, {:terminate, rem}}]}
     end
 
     def handle_event(
-      :internal,
-      {:parse, <<unquote(char), rem::binary>>},
-      {:find_terminator, unquote(opening), [next_search | old_search], state},
-      %{search_acc: acc} = data
-    ) do
+          :internal,
+          {:parse, <<unquote(char), rem::binary>>},
+          {:find_terminator, unquote(opening), [next_search | old_search], state},
+          %{search_acc: acc} = data
+        ) do
       new_data =
-	%{data | search_acc: [acc, unquote(char)]}
-	|> close_current()
-      
-      {:next_state, {:find_terminator, next_search, old_search, state}, new_data, [{:next_event, :internal, {:parse, rem}}]}
+        %{data | search_acc: [acc, unquote(char)]}
+        |> close_current()
+        |> inc_col(1)
+
+      {:next_state, {:find_terminator, next_search, old_search, state}, new_data,
+       [{:next_event, :internal, {:parse, rem}}]}
     end
   end)
 
-  Enum.each(["[", "(", ?", "'"], fn(char) ->
+  Enum.each(["[", "(", ?", "'"], fn char ->
     def handle_event(
-      :internal,
-      {:parse, <<unquote(char), rem::binary>>},
-      state,
-      %{search_acc: acc} = data
-    ) do
-      
+          :internal,
+          {:parse, <<unquote(char), rem::binary>>},
+          state,
+          %{search_acc: acc} = data
+        ) do
       new_data =
-	%{data | search_acc: [acc, unquote(char)]}
-	|> open_current({:terminator, unquote(char))
+        %{data | search_acc: [acc, unquote(char)]}
+        |> inc_col(1)
+        |> open_current({:terminator, unquote(char)})
 
       case state do
-	{:find_terminator, prev_search, old_search, old_state} ->
-	  {:next_state, {:find_terminator, unquote(char), [prev_search | old_search], old_state}, new_data, [{:next_event, :internal, {:parse, rem}}]}
-	_ ->
-	  {:next_state, {:find_terminator, unquote(char), [], state}, new_data, [{:next_event, :internal, {:parse, rem}}]}
+        {:find_terminator, prev_search, old_search, old_state} ->
+          {:next_state, {:find_terminator, unquote(char), [prev_search | old_search], old_state},
+           new_data, [{:next_event, :internal, {:parse, rem}}]}
+
+        _ ->
+          {:next_state, {:find_terminator, unquote(char), [], state}, new_data,
+           [{:next_event, :internal, {:parse, rem}}]}
       end
     end
   end)
 
-  def handle_event(:internal, {:parse, <<char::binary-size(1), rem::binary>>}, {:find_terminator, _, _, _}, %{search_acc: acc} = data) do
-    {:keep_state, %{data | search_acc: [acc, char]}, [{:next_event, :internal, {:parse, rem}}]}
+  Enum.each(@line_terminators, fn char ->
+    def handle_event(
+      :internal,
+      {:parse, <<unquote(char), rem::binary>>},
+      {:find_terminator, _, _, _},
+      %{search_acc: acc} = data
+    ) do
+
+      new_data =
+	%{data | search_acc: [acc, unquote(char)]}
+	|> inc_line()
+
+      {:keep_state, new_data, [{:next_event, :internal, {:parse, rem}}]}
+    end
+  end)
+
+  def handle_event(
+        :internal,
+        {:parse, <<char::binary-size(1), rem::binary>>},
+        {:find_terminator, _, _, _},
+        %{search_acc: acc} = data
+      ) do
+    new_data =
+      %{data | search_acc: [acc, char]}
+      |> inc_col(1)
+
+    {:keep_state, new_data, [{:next_event, :internal, {:parse, rem}}]}
   end
 
   def handle_event(
@@ -231,6 +262,7 @@ defmodule CSSEx.Parser do
       ) do
     new_data =
       data
+      |> open_current(:include)
       |> inc_col(8)
 
     {:next_state, {:parse, :value, :include}, new_data, [{:next_event, :internal, {:parse, rem}}]}
@@ -244,6 +276,7 @@ defmodule CSSEx.Parser do
       ) do
     new_data =
       data
+      |> open_current(:import)
       |> inc_col(7)
 
     {:next_state, {:parse, :value, :import}, new_data, [{:next_event, :internal, {:parse, rem}}]}
@@ -257,6 +290,7 @@ defmodule CSSEx.Parser do
       ) do
     new_data =
       data
+      |> open_current(:charset)
       |> inc_col(8)
 
     {:next_state, {:parse, :value, :charset}, new_data, [{:next_event, :internal, {:parse, rem}}]}
@@ -270,6 +304,7 @@ defmodule CSSEx.Parser do
       ) do
     new_data =
       data
+      |> open_current(:media)
       |> inc_col(6)
 
     {:next_state, {:parse, :value, :media}, new_data, [{:next_event, :internal, {:parse, rem}}]}
@@ -283,6 +318,7 @@ defmodule CSSEx.Parser do
       ) do
     new_data =
       data
+      |> open_current(:keyframes)
       |> inc_col(10)
 
     {:next_state, {:parse, :value, :keyframes}, new_data,
@@ -297,6 +333,7 @@ defmodule CSSEx.Parser do
       ) do
     new_data =
       %{data | font_face: true, font_face_count: ffc + 1}
+      |> open_current(:fontface)
       |> inc_col(10)
       |> first_rule()
 
@@ -312,6 +349,7 @@ defmodule CSSEx.Parser do
       ) do
     new_data =
       %{data | font_face: false}
+      |> close_current()
       |> inc_col(1)
 
     {:keep_state, new_data, [{:next_event, :internal, {:parse, rem}}]}
@@ -329,6 +367,7 @@ defmodule CSSEx.Parser do
 
     new_data =
       %{data | current_chain: new_cc_2}
+      |> close_current()
       |> inc_col()
 
     {:keep_state, new_data, [{:next_event, :internal, {:parse, rem}}]}
@@ -355,8 +394,6 @@ defmodule CSSEx.Parser do
       do: {:stop_and_reply, :normal, [{:reply, from, {:finished, {inc_col(data), rem}}}]}
 
   # we reached a closing bracket when searching for a key/attribute ditch whatever we have and add a warning
-
-  # TODO this will be wrong if we're on a current_key and this is part of a string, like div[data-json="{a: 1}"]
   def handle_event(
         :internal,
         {:parse, <<125, rem::binary>>},
@@ -366,6 +403,7 @@ defmodule CSSEx.Parser do
     new_data =
       data
       |> add_warning(:missing, state)
+      |> close_current()
       |> reset_current()
       |> inc_col()
 
@@ -389,20 +427,35 @@ defmodule CSSEx.Parser do
         _state,
         data
       ) do
-    {new_rem, new_data} = CSSEx.Helpers.EEX.parse(full, data)
 
-    {:keep_state, new_data, [{:next_event, :internal, {:parse, new_rem}}]}
+    case CSSEx.Helpers.EEX.parse(full, data) do
+      {:error, new_data} ->
+	{:keep_state, add_error(new_data), [{:next_event, :internal, {:parse, <<>>}}]}
+      {new_rem, %__MODULE__{} = new_data} ->
+	{:keep_state, new_data, [{:next_event, :internal, {:parse, new_rem}}]}
+    end
   end
 
   # we reached a new line char, reset the col, inc the line and continue
   Enum.each(@line_terminators, fn char ->
+    #  if we are parsing a var this is an error though
+    def handle_event(
+      :internal,
+      {:parse, <<unquote(char), rem::binary>>},
+      state,
+      data
+    ) when state == {:parse, :current_var} or state == {:parse, :value, :current_var} do
+      
+      {:keep_state, add_error(inc_col(data)), [{:next_event, :internal, {:parse, rem}}]}
+    end
+
     def handle_event(
           :internal,
           {:parse, <<unquote(char), rem::binary>>},
-          _,
+          _state,
           data
         ),
-        do: {:keep_state, inc_line(data), [{:next_event, :internal, {:parse, rem}}]}
+      do: {:keep_state, inc_line(data), [{:next_event, :internal, {:parse, rem}}]}
   end)
 
   Enum.each(@white_space, fn char ->
@@ -488,6 +541,7 @@ defmodule CSSEx.Parser do
     new_data =
       data
       |> set_scope(:global)
+      |> open_current(:assign)
       |> inc_col(2)
 
     {:next_state, {:parse, :current_assign}, new_data, [{:next_event, :internal, {:parse, rem}}]}
@@ -502,6 +556,7 @@ defmodule CSSEx.Parser do
     new_data =
       data
       |> set_scope(:local)
+      |> open_current(:assign)
       |> inc_col(3)
 
     {:next_state, {:parse, :current_assign}, new_data, [{:next_event, :internal, {:parse, rem}}]}
@@ -516,6 +571,7 @@ defmodule CSSEx.Parser do
     new_data =
       data
       |> set_scope(:conditional)
+      |> open_current(:assign)
       |> inc_col(3)
 
     {:next_state, {:parse, :current_assign}, new_data, [{:next_event, :internal, {:parse, rem}}]}
@@ -531,6 +587,7 @@ defmodule CSSEx.Parser do
     new_data =
       data
       |> set_scope(:global)
+      |> open_current(:variable)
       |> inc_col(2)
 
     {:next_state, {:parse, :current_var}, new_data, [{:next_event, :internal, {:parse, rem}}]}
@@ -545,6 +602,7 @@ defmodule CSSEx.Parser do
     new_data =
       data
       |> set_scope(:global)
+      |> open_current(:variable)
       |> set_add_var()
       |> inc_col(3)
 
@@ -560,6 +618,7 @@ defmodule CSSEx.Parser do
     new_data =
       data
       |> set_scope(:local)
+      |> open_current(:variable)
       |> inc_col(3)
 
     {:next_state, {:parse, :current_var}, new_data, [{:next_event, :internal, {:parse, rem}}]}
@@ -574,6 +633,7 @@ defmodule CSSEx.Parser do
     new_data =
       data
       |> set_scope(:local)
+      |> open_current(:variable)
       |> set_add_var()
       |> inc_col(4)
 
@@ -589,6 +649,7 @@ defmodule CSSEx.Parser do
     new_data =
       data
       |> set_scope(:conditional)
+      |> open_current(:variable)
       |> inc_col(2)
 
     {:next_state, {:parse, :current_var}, new_data, [{:next_event, :internal, {:parse, rem}}]}
@@ -603,6 +664,7 @@ defmodule CSSEx.Parser do
     new_data =
       data
       |> set_scope(:conditional)
+      |> open_current(:variable)
       |> set_add_var()
       |> inc_col(3)
 
@@ -620,6 +682,7 @@ defmodule CSSEx.Parser do
     new_data =
       data
       |> add_current_selector()
+      |> open_current(:selector)
       |> reset_current()
       |> inc_col()
       |> first_rule()
@@ -641,6 +704,7 @@ defmodule CSSEx.Parser do
         new_data =
           %{data | line: n_line, column: n_col}
           |> add_media_query(new_inner_data)
+          |> close_current()
           |> reset_current()
 
         {:next_state, {:parse, :next}, new_data, [{:next_event, :internal, {:parse, new_rem}}]}
@@ -666,6 +730,7 @@ defmodule CSSEx.Parser do
         new_data =
           %{data | line: n_line, column: n_col}
           |> add_keyframe(new_inner_data)
+          |> close_current()
           |> reset_current()
 
         {:next_state, {:parse, :next}, new_data, [{:next_event, :internal, {:parse, new_rem}}]}
@@ -686,6 +751,7 @@ defmodule CSSEx.Parser do
     new_data =
       data
       |> Map.put(:current_key, [char])
+      |> open_current(:rule)
       |> inc_col()
       |> first_rule()
 
@@ -712,6 +778,7 @@ defmodule CSSEx.Parser do
         new_data =
           data
           |> merge_inner_data(new_inner_data)
+          |> close_current()
           |> reset_current()
           |> add_to_dependencies(file)
           |> merge_dependencies(new_inner_data)
@@ -740,6 +807,7 @@ defmodule CSSEx.Parser do
       data
       |> maybe_add_css_var(cvar, cval)
       |> add_to_var(cvar, cval)
+      |> close_current()
       |> reset_current()
       |> inc_col()
 
@@ -766,6 +834,7 @@ defmodule CSSEx.Parser do
     new_data =
       data
       |> add_to_attributes(ckey, cval)
+      |> close_current()
       |> reset_current()
       |> inc_col()
       |> first_rule()
@@ -787,6 +856,7 @@ defmodule CSSEx.Parser do
     new_data =
       data
       |> add_to_attributes(ckey, cval)
+      |> close_current()
       |> reset_current()
       |> inc_col()
       |> first_rule()
@@ -795,27 +865,26 @@ defmodule CSSEx.Parser do
   end
 
   def handle_event(
-    :internal,
-    {:terminate, rem},
-    {:after_terminator, {:parse, type} = next},
-    %{search_acc: acc} = data
-  ) do
-
+        :internal,
+        {:terminate, rem},
+        {:after_terminator, {:parse, type} = next},
+        %{search_acc: acc} = data
+      ) do
     new_data =
       %{data | search_acc: ""}
       |> Map.put(type, [Map.fetch!(data, type), acc])
-    
+
     {:next_state, next, new_data, [{:next_event, :internal, {:parse, rem}}]}
   end
 
   def handle_event(
-    :internal,
-    {:terminate, rem},
-    {:after_terminator, {:parse, :value, _type} = next},
-    %{search_acc: acc, current_value: cval} = data
-  ) do
+        :internal,
+        {:terminate, rem},
+        {:after_terminator, {:parse, :value, _type} = next},
+        %{search_acc: acc, current_value: cval} = data
+      ) do
     new_data = %{data | search_acc: "", current_value: [cval, acc]}
-    
+
     {:next_state, next, new_data, [{:next_event, :internal, {:parse, rem}}]}
   end
 
@@ -840,6 +909,7 @@ defmodule CSSEx.Parser do
     new_data =
       data
       |> validate_charset()
+      |> close_current()
       |> reset_current()
       |> inc_col()
 
@@ -856,6 +926,7 @@ defmodule CSSEx.Parser do
     new_data =
       data
       |> validate_import()
+      |> close_current()
       |> reset_current()
       |> inc_col()
 
@@ -1366,10 +1437,28 @@ defmodule CSSEx.Parser do
     {:stop_and_reply, new_data, [{:reply, from, new_data}]}
   end
 
-  def add_error(%{line: line, column: column} = data, error) do
-    %{data | valid?: false, error: "#{error} :: l:#{line} c:#{column}"}
+  def add_error(%{current_reg: [{s_line, s_col, step} | _], line: e_line, column: e_col} = data) do
+    error_translate =
+      case step do
+	{:terminator, char} when is_integer(char) -> <<"unable to find terminator for ", char>>
+	{:terminator, char} when is_binary(char) -> "unable to find terminator for #{char}"
+	_ -> "invalid #{inspect step} declaration"
+      end
+    
+    error_msg = "ERROR: #{error_translate} from l:#{s_line} col:#{s_col} to l:#{e_line} c:#{e_col}"
+
+    %{data | valid?: false, error: error_msg}
+  end
+
+  def add_error(%{line: line, column: column, current_reg: []} = data, error) do
+    %{data | valid?: false, error: "#{inspect error} :: l:#{line} c:#{column}"}
   end
 
   def msg_error({:enoent, file_path}, line, column),
     do: "unable to open file: #{file_path} ::: l:#{line} c:#{column}"
+
+  def open_current(%{current_reg: creg, line: l, column: c} = data, element),
+    do: %{data | current_reg: [{l, c, element} | creg]}
+
+  def close_current(%{current_reg: [_ | t]} = data), do: %{data | current_reg: t}
 end
