@@ -3,6 +3,7 @@ defmodule CSSEx.Helpers.Assigns do
   Helpers for parsing a CSSEx assign, given it can be any elixir term/expression to be evaluated it has different rules and should keep all characters until the termination mark, afterwards it should be validated and return either an updated {rem, %CSSEx.Parser{valid?: true}} or {rem, %CSSEx.Parser{valid?: false}} with the error field populated.
   """
 
+  import CSSEx.Parser, only: [close_current: 1, add_error: 1]
   import CSSEx.Helpers.Shared, only: [inc_col: 1, inc_line: 1]
   @line_terminators CSSEx.Helpers.LineTerminators.code_points()
 
@@ -19,6 +20,7 @@ defmodule CSSEx.Helpers.Assigns do
       new_data =
         data
         |> add_assign(ckey, final_val)
+	|> close_current()
         |> inc_line()
 
       {rem, new_data}
@@ -41,6 +43,9 @@ defmodule CSSEx.Helpers.Assigns do
   # acc the assign, given this is elixir we accumulate any char, we'll validate once we try to compile it
   def parse(<<char::binary-size(1), rem::binary>>, %{current_value: cval} = data),
     do: parse(rem, inc_col(%{data | current_value: [cval | char]}))
+
+  def parse(<<>>, data),
+    do: {<<>>, add_error(data)}
 
   def add_assign(
         %{current_scope: :global, assigns: assigns, local_assigns: local_assigns} = data,

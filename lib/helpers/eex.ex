@@ -1,14 +1,16 @@
 defmodule CSSEx.Helpers.EEX do
-  import CSSEx.Helpers.Shared, only: [inc_col: 1, inc_col: 2, inc_line: 1]
+  import CSSEx.Parser, only: [open_current: 2, close_current: 1]
+  import CSSEx.Helpers.Shared, only: [inc_col: 1, inc_col: 2, inc_line: 1, inc_line: 2]
   @line_terminators CSSEx.Helpers.LineTerminators.code_points()
   @white_space CSSEx.Helpers.WhiteSpace.code_points()
 
   defstruct line: 0, column: 0, level: 0, acc: ""
 
   def parse(rem, data) do
-    case do_parse(rem, data, %__MODULE__{}) do
+    new_data = open_current(data, :eex)
+    case do_parse(rem, new_data, %__MODULE__{}) do
       {:ok, {_, _} = result} -> result
-      {:error, new_data} -> {rem, new_data}
+      {:error, _new_data} = error -> error
     end
   end
 
@@ -29,7 +31,8 @@ defmodule CSSEx.Helpers.EEX do
       end
 
     line_correction = calc_line_offset(state, final)
-    {:ok, {final <> rem, %{data | line: line + line_correction}}}
+    
+    {:ok, {final <> rem, %{close_current(data) | line: line + line_correction}}}
   rescue
     error ->
       description =
@@ -43,7 +46,14 @@ defmodule CSSEx.Helpers.EEX do
        %{data | valid?: false, error: "Error parsing EEX tag: #{description} :: line: #{line}"}}
   end
 
-  def do_parse(<<>>, _data, _state), do: {:error, :eof}
+  def do_parse(<<>>, data, %{column: col, line: line}) do
+    new_data =
+      data
+      |> inc_line(line)
+      |> inc_col(col)
+    
+    {:error, new_data}
+  end
 
   def do_parse(<<"<% end %>", rem::binary>>, data, %{acc: acc} = state) do
     %{state | acc: [acc | "<% end %>"]}
