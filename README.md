@@ -19,6 +19,31 @@ Its main purpose is to provide a native Elixir pre-processor for CSS, in the vei
 
 ### Functionality:
 
+#### Nested selectors and '&' concatenation
+
+```css
+button {
+    background-color: blue;
+    color: white;
+    padding: 5px;
+    
+    .class_1 {
+        color: yellow;
+    }
+
+    &.concatenated_class {
+       padding: 10px;
+    }
+}
+```
+
+##### into
+
+```css
+button { background-color: blue; color: white; padding: 5px; }
+button .class_1  { color: yellow; }
+button.concatenated_class { padding: 10px; }
+```
 
 #### Variables
 
@@ -272,9 +297,7 @@ end
 ```
 
 This will define an entry point file of `priv/static/cssex/base.cssex` which will output its parsed content into `priv/static/css/base.css`.
-
-### NOTE
-The file watcher still needs some work, if you add the entry point without the file being existing it will crash (and log) and you'll need to restart the server, but a better strategy will be implemented in the future releases, the directory of the failed file will be set under watch and resume once the file appears.
+In this case you'll need to create the folder and cssex file as well. It will log errors if the directory or file doesn't exist.
 
 <div id="motivation"></div>
 
@@ -315,8 +338,6 @@ div {
 ```
 
 - Basic functions such as: `lighten`, `darken`, etc.;
-- Fix the current line and column error/warning reporting - this is mostly fixing what is already there (it's offset right now) and including the start line & col on each parsed selector, attribute, expression;
-- Implement proper delimiter parsing, right now the parser doesn't check that each of (, [, {, ", ' have the proper ending char (always pairs), which can result in errors, such as using `"data[d-attr="something { color: red; }` being parsed and output as that invalid CSS selector.
 - Mix task for parsing CSSEx files
 
 
