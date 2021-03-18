@@ -29,7 +29,10 @@ defmodule CSSEx.File.Test do
                target_originals_relative
              )
 
-    {:ok, %{target_originals: target_originals}}
+    non_existing_path = Path.join([cwd, "test", "files", "non_existing"])
+    assert {:ok, _} = File.rm_rf(non_existing_path)
+
+    {:ok, %{target_originals: target_originals, non_existing: non_existing_path}}
   end
 
   @full_final_css ".test_2{background-color:#ffffff;color:#000000;}.test_1{background-color:#000000;color:#ffffff;}div{color:black;color:white;background-color:red;}div:hover{cursor:pointer;background-color:green;color:purple;}\n"
@@ -88,6 +91,51 @@ defmodule CSSEx.File.Test do
 
                    _ ->
                      Process.sleep(200)
+                     {:cont, acc + 1}
+                 end
+             end
+           end)
+  end
+
+  test "entry points when the folder doesn't exist still work and pick up once its created", %{non_existing: non_existing_path} do
+    base_path = Path.join(["test", "files", "non_existing", "test_1.cssex"])
+    final_path = Path.join(["test", "files", "non_existing", "test_1.css"])
+    entry_points = Map.put(%{}, base_path, final_path)
+    {:ok, pid} = CSSEx.start_link(%CSSEx{entry_points: entry_points})
+
+    assert :ready = :gen_statem.call(pid, :status)
+    refute File.exists?(non_existing_path)
+    
+    assert :ok = File.mkdir(non_existing_path)
+    assert :ready = :gen_statem.call(pid, :status)
+
+    {:ok, base_handler} = File.open(base_path, [:append])
+    to_write = ".write{color:red;}"
+    IO.write(base_handler, to_write)
+    assert :ok = File.close(base_handler)
+    
+    assert Enum.reduce_while(Stream.cycle([1]), 0, fn _, acc ->
+             case Integer.mod(acc, 5) do
+               _ when acc == 50 ->
+                 {:halt, false}
+
+               0 ->
+                 {:ok, original_handler} = File.open(base_path, [:append])
+                 assert :ok = File.close(original_handler)
+                 {:cont, acc + 1}
+
+               _ ->
+                 assert :ready = :gen_statem.call(pid, :status)
+                 case File.read(final_path) do
+		   {:ok, result} ->
+		     case result == to_write <> "\n" do
+		       true -> {:halt, true}
+		       _ ->
+			 Process.sleep(200)
+			 {:cont, acc + 1}
+		     end
+		   _ ->
+		     Process.sleep(200)
                      {:cont, acc + 1}
                  end
              end

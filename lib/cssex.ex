@@ -54,37 +54,55 @@ defmodule CSSEx do
 
   @impl :gen_statem
   def init(%__MODULE__{} = config) do
-    {:ok, :starting, config, [{:next_event, :internal, :start}]}
+    {:ok, :starting, config, [{:next_event, :internal, :prepare}]}
   end
 
   @impl :gen_statem
-  def handle_event(:internal, :start, _, %{entry_points: entries} = data) do
+  # parse and set up the correct paths in case they're relative and substitute the entry_points field with those updated, trigger the :setup event
+  def handle_event(:internal, :prepare, _, %{entry_points: entries} = data) do
     cwd = File.cwd!()
+    new_entries =
+      Enum.reduce(entries, %{}, fn({path, final}, acc) ->
+	expanded_base = assemble_path(path, cwd)
+	expanded_final = assemble_path(final, cwd)
+	Map.put(acc, expanded_base, expanded_final)
+      end)
+
+    {:keep_state, %{data | entry_points: new_entries}, [{:next_event, :internal, :setup}]}
+  end
+
+  # create the basic depedency graph, in this case it will just be for the entry points base paths, trigger the :start event
+  def handle_event(:internal, :setup, _, %{entry_points: entries, dependency_graph: dg} = data) do
+    new_dg =
+      Enum.reduce(entries, dg, fn({path, _}, acc) ->
+	Map.put(acc, path, [path])
+      end)
+
+    new_data =
+      %{data | dependency_graph: new_dg}
+      |> synch_watchers()
+
+    {:keep_state, new_data, [{:next_event, :internal, :start}]}
+  end
+
+  # for each entry point check if it exists, if it does start a parser under a monitor, if it not log an error
+  def handle_event(:internal, :start, _, %{entry_points: entries} = data) do
     self_pid = self()
 
-    {new_monitors, new_entries} =
-      Enum.reduce(entries, {%{}, %{}}, fn {path, final}, {monitors_acc, entries_acc} ->
-        expanded_base = assemble_path(path, cwd)
-
-        case !File.exists?(expanded_base) do
-          false ->
-            expanded_final = assemble_path(final, cwd)
-
-            {_pid, monitor} =
-              Process.spawn(__MODULE__, :parse_file, [expanded_base, self_pid], [:monitor])
-
-            new_monitors_acc = Map.put(monitors_acc, monitor, expanded_base)
-            new_entries_acc = Map.put(entries_acc, expanded_base, expanded_final)
-
-            {new_monitors_acc, new_entries_acc}
-
+    new_monitors =
+      Enum.reduce(entries, %{}, fn {path, _final}, monitors_acc ->
+        case File.exists?(path) do
           true ->
-            do_exit("Couldn't find entry point #{expanded_base}")
+            {_pid, monitor} = Process.spawn(__MODULE__, :parse_file, [path, self_pid], [:monitor])
+	    Map.put(monitors_acc, monitor, path)
+
+          false ->
+	    Logger.error("CSSEx Watcher: Couldn't find entry point #{path}")
+	    monitors_acc
         end
       end)
 
-    {:next_state, :processing, %{data | monitors: new_monitors, entry_points: new_entries},
-     [@timeout]}
+    {:next_state, :processing, %{data | monitors: new_monitors}, [{:next_event, :internal, :set_status}, @timeout]}
   end
 
   def handle_event(:internal, {:process, file_path}, _, %{monitors: monitors} = data) do
@@ -93,7 +111,7 @@ defmodule CSSEx do
     {_pid, monitor} = Process.spawn(__MODULE__, :parse_file, [file_path, self_pid], [:monitor])
 
     new_monitors = Map.put(monitors, monitor, file_path)
-    {:next_state, :processing, %{data | monitors: new_monitors}, [@timeout]}
+    {:next_state, :processing, %{data | monitors: new_monitors}, [{:next_event, :internal, :set_status}, @timeout]}
   end
 
   def handle_event(:internal, {:post_process, parser, file_contents}, _, _data) do
@@ -156,12 +174,10 @@ defmodule CSSEx do
         dependency_graph: dependency_graph,
         entry_points: eps
       }) do
+    
     events =
       case Map.get(dependency_graph, file_path) do
-        [] ->
-          []
-
-        deps ->
+        [_|_] = deps ->
           Enum.reduce(deps, [], fn dep, acc ->
             case Map.get(eps, dep) do
               nil -> acc
@@ -169,6 +185,8 @@ defmodule CSSEx do
             end
           end)
           |> Enum.uniq()
+	_ ->
+          [{:next_event, :internal, :set_status}]
       end
 
     {:keep_state_and_data, events}
@@ -203,6 +221,27 @@ defmodule CSSEx do
     end
   end
 
+  def handle_event(:info, {:file_event, worker_pid, :stop}, _, %{watchers: watchers} = data) do
+    new_data =
+      case Map.pop(watchers, worker_pid) do
+	{path, new_watchers} when is_binary(path) ->
+	  {_, final_watchers} = Map.pop(watchers, path)
+	  %{data | watchers: final_watchers}
+	{nil, _} -> data
+      end
+      |> synch_watchers()
+
+    {:keep_state, new_data, [{:next_event, :internal, :set_status}]}
+  end
+
+  def handle_event(:info, :retry_watchers, _, data) do
+    new_data =
+      data
+      |> synch_watchers()
+
+    {:keep_state, new_data, []}
+  end
+
   def handle_event({:call, from}, :status, state, %{reply_to: reply_to} = data) do
     case state do
       :ready -> {:keep_state_and_data, [{:reply, from, :ready}]}
@@ -230,15 +269,23 @@ defmodule CSSEx do
 
     new_watchers =
       Enum.reduce(unique_watch_paths, watchers, fn path, acc ->
-        case Map.get(acc, path) do
-          nil ->
-            {:ok, pid} = FileSystem.start_link(dirs: [path])
-            FileSystem.subscribe(pid)
-            Map.put(acc, path, pid)
-
-          _ ->
-            acc
-        end
+	case File.exists?(path) do
+	  true ->
+            case Map.get(acc, path) do
+              nil ->
+		{:ok, pid} = FileSystem.start_link(dirs: [path])
+		FileSystem.subscribe(pid)
+		acc
+		|> Map.put(path, pid)
+		|> Map.put(pid, path)
+	      _ ->
+		acc
+            end
+	  false ->
+	    Logger.error("CSSEx Watcher: #{path} doesn't exist, retrying in 2secs")
+	    Process.send_after(self(), :retry_watchers, 2000)
+	    acc
+	end
       end)
 
     %{data | watchers: new_watchers}
