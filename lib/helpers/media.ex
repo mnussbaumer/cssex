@@ -85,7 +85,7 @@ defmodule CSSEx.Helpers.Media do
         declaration ->
           String.split(declaration, ~r/:/, trim: true)
           |> Enum.map(fn token ->
-            case CSSEx.Parser.maybe_replace_val(String.trim(token), data) do
+            case CSSEx.Helpers.Interpolations.maybe_replace_val(String.trim(token), data) do
               {:ok, new_token} -> new_token
               {:error, _} -> raise "#{token} was not declared"
             end
