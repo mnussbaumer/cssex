@@ -25,3 +25,5 @@ cssex-*.tar
 
 # Temporary files for e.g. tests
 /tmp
+
+/.sass-cache
