@@ -225,7 +225,7 @@ defmodule CSSEx do
     new_data =
       case Map.pop(watchers, worker_pid) do
 	{path, new_watchers} when is_binary(path) ->
-	  {_, final_watchers} = Map.pop(watchers, path)
+	  {_, final_watchers} = Map.pop(new_watchers, path)
 	  %{data | watchers: final_watchers}
 	{nil, _} -> data
       end
@@ -301,9 +301,4 @@ defmodule CSSEx do
 
   defp assemble_path(path, cwd),
     do: Path.join([cwd, path]) |> Path.expand()
-
-  defp do_exit(msg) do
-    Logger.error(msg)
-    exit(msg)
-  end
 end

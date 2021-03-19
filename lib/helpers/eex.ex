@@ -110,7 +110,7 @@ defmodule CSSEx.Helpers.EEX do
                                              {eex_block, bindings} ->
       case Map.get(local_assigns, name) || Map.get(assigns, name) do
         nil ->
-          {:halt, {:error, {:not_declared, name}}}
+          {:halt, {:error, {:not_declared, :var, name}}}
 
         val ->
           {:cont,
@@ -136,6 +136,9 @@ defmodule CSSEx.Helpers.EEX do
   def inc_level(%{level: level} = state, amount \\ 1),
     do: %{state | level: level + amount}
 
-  def add_error(data, {:not_declared, val}),
-    do: %{data | valid?: false, error: "#{val} was not declared"}
+  def add_error(data, {:not_declared, :var, val}),
+    do: %{data | valid?: false, error: "variable #{val} was not declared"}
+
+  def add_error(data, {:not_declared, :assign, val}),
+    do: %{data | valid?: false, error: "assign #{val} was not declared"}
 end

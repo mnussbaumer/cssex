@@ -1,6 +1,8 @@
 defmodule CSSEx.Parser do
   import CSSEx.Helpers.Shared, only: [inc_col: 1, inc_col: 2, inc_line: 1]
-
+  import CSSEx.Helpers.Interpolations, only: [maybe_replace_val: 2]
+  import CSSEx.Helpers.Error, only: [error_msg: 1]
+  
   @behaviour :gen_statem
 
   @timeout 15_000
@@ -31,6 +33,8 @@ defmodule CSSEx.Parser do
     current_assign: "",
     current_scope: nil,
     current_add_var: false,
+    current_function: "",
+    functions: %{},
     level: 0,
     charset: nil,
     first_rule: true,
@@ -51,11 +55,18 @@ defmodule CSSEx.Parser do
   # "@font-feature-values", # Allows authors to use a common name in font-variant-alternate for feature activated differently in OpenType
 
   @doc """
-  Takes a file path to a cssex or css file and parses it into a final CSS representation returning either:
+  Takes a file path to a cssex or css file and parses it into a final CSS
+   representation returning either:
+
   {:ok, %__MODULE__{}, final_binary}
   {:error, term}
 
-  Additionally a %__MODULE__{} struct with prefilled details can be passed as the first argument in which case the parser will use it as its configuration. This is used internally when parsing @include statements in order to propagate the parent assigns and scope, but can also be used to pass assigns or scope that don't live on the cssex files, or keep ownership of the rules ETS table upon finishing in case iterating through all final css rules is desired.
+  Additionally a %__MODULE__{} struct with prefilled details can be passed as the first
+  argument in which case the parser will use it as its configuration. This is used
+  internally when parsing @include statements in order to propagate the parent assigns
+  and scope, but can also be used to pass assigns or scope that don't live on the cssex
+  files, or keep ownership of the rules ETS table upon finishing in case iterating
+  through all final css rules is desired.
   """
   @spec parse_file(path :: String.t(), file_path :: String.t()) ::
           {:ok, %__MODULE__{}, String.t()} | {:error, term}
@@ -74,7 +85,8 @@ defmodule CSSEx.Parser do
   {:ok, %__MODULE__{}, final_binary}
   {:error, term}
 
-  Again, a predefined %__MODULE__{} struct can be passed as the first argument to force the parser to operate from that, including adding assigns or scope.
+  Again, a predefined %__MODULE__{} struct can be passed as the first argument to
+  force the parser to operate from that, including adding assigns or scope.
   """
 
   def parse(content) do
@@ -135,7 +147,13 @@ defmodule CSSEx.Parser do
     case path in file_list do
       true ->
         {:stop_and_reply, :normal,
-         [{:reply, from, {:error, {:cyclic_reference, path, file_list}}}]}
+         [{
+	   :reply,
+	   from,
+	   {:error, add_error(data, error_msg({:cyclic_reference, path, file_list}))}
+	   }
+	 ]
+	}
 
       _ ->
         case File.read(path) do
@@ -152,21 +170,64 @@ defmodule CSSEx.Parser do
              [{:next_event, :internal, {:parse, content}}]}
 
           {:error, :enoent} ->
-            {:stop_and_reply, :normal, [{:reply, from, {:error, {:enoent, path}}}]}
+            {:stop_and_reply, :normal,
+	     [{
+	       :reply,
+	       from,
+	       {:error, add_error(data, error_msg({:enoent, path}))}
+	       }
+	     ]
+	    }
         end
     end
   end
 
-  # we are in an invalid parsing state, abort and return an error with the current state and data
+  # we are in an invalid parsing state, abort and return an error with the current
+  # state and data
   def handle_event(:internal, {:parse, _}, state, %{valid?: false, answer_to: from} = data),
     do: {:stop_and_reply, :normal, [{:reply, from, {:error, {state, data}}}]}
 
-  # we have reached the end of the binary, there's nothing else to do except answer the caller, if we're in something else than {:parse, :next} it's an error
+  # we have reached the end of the binary, there's nothing else to do except answer
+  # the caller, if we're in something else than {:parse, :next} it's an error
   def handle_event(:internal, {:parse, ""}, state, %{answer_to: from} = data) do
     case state do
       {:parse, :next} -> reply_finish(data)
-      _ -> {:stop_and_reply, :normal, [{:reply, from, {:error, {state, add_error(data)}}}]}
+      _ ->
+	{:stop_and_reply, :normal, [
+	    {:reply, from, {:error, {state, add_error(data)}}}
+	  ]
+	}
     end
+  end
+
+  # Handle a function call, this is on top of everything as when outside EEx blocks,
+  # meaning normal parsing, it should be replaced by the return value of the function
+  # we parse from @fn:: ... to the end of the declaration ")", we do it the Function
+  # module as it has its own parsing nuances
+  def handle_event(
+    :internal,
+    {:parse, <<"@fn::", rem::binary>>},
+    _state,
+    data
+  ) do
+
+    new_data =
+      data
+      |> open_current(:function_call)
+      |> inc_col(2)
+    
+    case CSSEx.Helpers.Function.parse_call(new_data, rem) do
+      {:ok, {new_data_2, new_rem}} ->
+	new_data_3 =
+	  new_data_2
+	|> close_current()
+
+	{:keep_state, new_data_3, [{:next_event, :internal, {:parse, new_rem}}]}
+
+      {:error, %{valid?: false} = error_data} ->
+	{:keep_state, error_data, [{:next_event, :internal, {:parse, rem}}]}
+    end
+    
   end
 
   Enum.each([{"]", "["}, {")", "("}, {?", ?"}, {"'", "'"}], fn {char, opening} ->
@@ -255,6 +316,21 @@ defmodule CSSEx.Parser do
   end
 
   def handle_event(
+    :internal,
+    {:parse, <<"@fn", rem::binary>>},
+    {:parse, :next},
+    data
+  ) do
+
+    new_data =
+      data
+      |> open_current(:function)
+      |> inc_col(3)
+
+    {:next_state, {:parse, :value, :current_function}, new_data, [{:next_event, :internal, {:parse, rem}}]}
+  end
+
+  def handle_event(
         :internal,
         {:parse, <<"@include", rem::binary>>},
         {:parse, :next},
@@ -340,7 +416,8 @@ defmodule CSSEx.Parser do
     {:next_state, {:parse, :current_key}, new_data, [{:next_event, :internal, {:parse, rem}}]}
   end
 
-  # we have reached a closing bracket } while accumulating a font-face, reset the font-face toggle and resume normal parsing
+  # we have reached a closing bracket } while accumulating a font-face, reset the
+  # font-face toggle and resume normal parsing
   def handle_event(
         :internal,
         {:parse, <<125, rem::binary>>},
@@ -355,7 +432,8 @@ defmodule CSSEx.Parser do
     {:keep_state, new_data, [{:next_event, :internal, {:parse, rem}}]}
   end
 
-  # we have reached a closing bracket } which means we should move back up in the chain ditching our last value in it, and start searching for the next token
+  # we have reached a closing bracket } which means we should move back up in the
+  # chain ditching our last value in it, and start searching for the next token
   def handle_event(
         :internal,
         {:parse, <<125, rem::binary>>},
@@ -373,7 +451,8 @@ defmodule CSSEx.Parser do
     {:keep_state, new_data, [{:next_event, :internal, {:parse, rem}}]}
   end
 
-  # we reached a closing bracket without being inside a block and at the top level, error out
+  # we reached a closing bracket without being inside a block and at the top level,
+  # error out
   def handle_event(
         :internal,
         {:parse, <<125, _::binary>>},
@@ -384,7 +463,8 @@ defmodule CSSEx.Parser do
     {:stop_and_reply, :normal, [{:reply, from, {:error, {state, new_data}}}]}
   end
 
-  # we reached a closing bracket without being inside a block in an inner level, inc the col and return to original the current data and the remaining text
+  # we reached a closing bracket without being inside a block in an inner level, inc
+  # the col and return to original the current data and the remaining text
   def handle_event(
         :internal,
         {:parse, <<125, rem::binary>>},
@@ -393,7 +473,8 @@ defmodule CSSEx.Parser do
       ),
       do: {:stop_and_reply, :normal, [{:reply, from, {:finished, {inc_col(data), rem}}}]}
 
-  # we reached a closing bracket when searching for a key/attribute ditch whatever we have and add a warning
+  # we reached a closing bracket when searching for a key/attribute ditch whatever we
+  # have and add a warning
   def handle_event(
         :internal,
         {:parse, <<125, rem::binary>>},
@@ -410,7 +491,10 @@ defmodule CSSEx.Parser do
     {:next_state, {:parse, :next}, new_data, [{:next_event, :internal, {:parse, rem}}]}
   end
 
-  # we reached a closing bracket } while we were searching for a value to an attribute inside a previously opened block (we have a current chain), meaning there's no ; char, this is allowed on the last attr:val of a block, so we will do as if it was there and just reparse adding the ; to the beggining
+  # we reached a closing bracket } while we were searching for a value to an attribute
+  # inside a previously opened block (we have a current chain), meaning there's no ;
+  # char, this is allowed on the last attr:val of a block, so we will do as if it was
+  # there and just reparse adding the ; to the beggining
   def handle_event(
         :internal,
         {:parse, <<125, _::binary>> = full},
@@ -420,7 +504,8 @@ defmodule CSSEx.Parser do
     {:keep_state, data, [{:next_event, :internal, {:parse, <<";", full::binary>>}}]}
   end
 
-  # we reached an eex opening tag, because it requires dedicated handling and parsing we move to a different parse step
+  # we reached an eex opening tag, because it requires dedicated handling and parsing
+  # we move to a different parse step
   def handle_event(
         :internal,
         {:parse, <<"<%", _::binary>> = full},
@@ -459,7 +544,8 @@ defmodule CSSEx.Parser do
   end)
 
   Enum.each(@white_space, fn char ->
-    # we reached a white-space char while searching for the next token, inc the column, keep searching
+    # we reached a white-space char while searching for the next token, inc the column,
+    # keep searching
     def handle_event(
           :internal,
           {:parse, <<unquote(char), rem::binary>>},
@@ -479,7 +565,9 @@ defmodule CSSEx.Parser do
           {:next_state, {:parse, :value, :current_var}, inc_col(data),
            [{:next_event, :internal, {:parse, rem}}]}
 
-    # we reached a white-space while building an assign, move to parse the value now, the assign is special because it can be any term and needs to be validated by compiling it so we do it in a special parse step
+	  # we reached a white-space while building an assign, move to parse the value
+	  # now, the assign is special because it can be any term and needs to be
+	  # validated by compiling it so we do it in a special parse step
     def handle_event(
           :internal,
           {:parse, <<unquote(char), rem::binary>>},
@@ -492,7 +580,8 @@ defmodule CSSEx.Parser do
        [{:next_event, :internal, {:parse, new_rem}}]}
     end
 
-    # we reached a white-space while building a media query or keyframe name, include the whitespace in the value
+    # we reached a white-space while building a media query or keyframe name, include
+    # the whitespace in the value
     def handle_event(
           :internal,
           {:parse, <<unquote(char), rem::binary>>},
@@ -506,7 +595,9 @@ defmodule CSSEx.Parser do
           [{:next_event, :internal, {:parse, rem}}]
         }
 
-    # we reached a white-space while building a value parsing - ditching the white-space depends on if we're in the middle of a value or in the beginning and the type of key we're searching
+	# we reached a white-space while building a value parsing - ditching the
+	# white-space depends on if we're in the middle of a value or in the beginning
+	# and the type of key we're searching
     def handle_event(
           :internal,
           {:parse, <<unquote(char), rem::binary>>},
@@ -531,7 +622,8 @@ defmodule CSSEx.Parser do
     end
   end)
 
-  # We found an assign assigment when searching for the next token, prepare for parsing it
+  # We found an assign assigment when searching for the next token, prepare for
+  # parsing it
   def handle_event(
         :internal,
         {:parse, <<"%!", rem::binary>>},
@@ -671,7 +763,10 @@ defmodule CSSEx.Parser do
     {:next_state, {:parse, :current_var}, new_data, [{:next_event, :internal, {:parse, rem}}]}
   end
 
-  # we found the selector end char { opening a css inner context while searching for the :current_key, which means that this is a selector that we were parsing, add it and start searching for the next token (we use 123 because ?{ borks the text-editor identation)
+  # we found the selector end char { opening a css inner context while searching for
+  # the :current_key, which means that this is a selector that we were parsing, add it
+  # and start searching for the next token (we use 123 because ?{ borks the
+  # text-editor identation)
   def handle_event(
         :internal,
         {:parse, <<123, rem::binary>>},
@@ -690,7 +785,10 @@ defmodule CSSEx.Parser do
     {:next_state, {:parse, :next}, new_data, [{:next_event, :internal, {:parse, rem}}]}
   end
 
-  # we found the selector end char { opening a css inner context while parsing the @media attributes, we start a subsequent gen_statem to continue which will accumulate itself and answer back to this one where it will merge what was found there
+  # we found the selector end char { opening a css inner context while parsing the
+  # @media attributes, we start a subsequent gen_statem to continue which will
+  # accumulate itself and answer back to this one where it will merge what was found
+  # there
   def handle_event(
         :internal,
         {:parse, <<123, rem::binary>>},
@@ -715,7 +813,12 @@ defmodule CSSEx.Parser do
     end
   end
 
-  # we found the selector end char { opening a css inner context while parsing the @keyframes name, we'll do the parsing for those in a new parser gen_statem because we can't construct the key path correctly from this level, but inside the keyframe block they're in all similar to a normal css selector + block, then with the result of that parser we'll put all those elements inside a single selector @keyframes + animation name
+  # we found the selector end char { opening a css inner context while parsing the
+  # @keyframes name, we'll do the parsing for those in a new parser gen_statem because
+  # we can't construct the key path correctly from this level, but inside the keyframe
+  # block they're in all similar to a normal css selector + block, then with the
+  # result of that parser we'll put all those elements inside a single selector
+  # @keyframes + animation name
   def handle_event(
         :internal,
         {:parse, <<123, rem::binary>>},
@@ -741,7 +844,32 @@ defmodule CSSEx.Parser do
     end
   end
 
-  # we found a non-white-space/line-end char while searching for the next token, which means it's a regular css rule start, prepare for parsing it
+  # we found the selector end char { opening an inner content while parsing a @fn,
+  # we'll do the parsing for those in a another module as it needs to evaluate the
+  # parsed content and create an anonymous fun
+  def handle_event(
+    :internal,
+    {:parse, <<123, rem::binary>>},
+    {:parse, :value, :current_function},
+    data
+  ) do
+
+    case CSSEx.Helpers.Function.parse(inc_col(data), rem) do
+      {:ok, {new_data, new_rem}} ->
+	new_data_2 =
+	  new_data
+	|> close_current()
+	|> reset_current()
+	
+	{:next_state, {:parse, :next}, new_data_2, [{:next_event, :internal, {:parse, new_rem}}]}
+
+      error ->
+	stop_with_error(data, error)
+    end
+  end
+
+  # we found a non-white-space/line-end char while searching for the next token,
+  # which means it's a regular css rule start, prepare for parsing it
   def handle_event(
         :internal,
         {:parse, <<char, rem::binary>>},
@@ -758,7 +886,8 @@ defmodule CSSEx.Parser do
     {:next_state, {:parse, :current_key}, new_data, [{:next_event, :internal, {:parse, rem}}]}
   end
 
-  # we reached the termination ; char while assembling an include statement, start a new parser with the current ets table
+  # we reached the termination ; char while assembling an include statement, start a
+  # new parser with the current ets table
   def handle_event(
         :internal,
         {:parse, <<?;, rem::binary>>},
@@ -791,7 +920,8 @@ defmodule CSSEx.Parser do
     end
   end
 
-  # we reached the termination ; char while assembling a variable, cleanup and add it to the correct scopes
+  # we reached the termination ; char while assembling a variable, cleanup and add it
+  # to the correct scopes
   def handle_event(
         :internal,
         {:parse, <<?;, rem::binary>>},
@@ -814,7 +944,8 @@ defmodule CSSEx.Parser do
     {:next_state, {:parse, :next}, new_data, [{:next_event, :internal, {:parse, rem}}]}
   end
 
-  # we reached the termination ; char while assembling an attribute, cleanup and add it to the correct ets slot
+  # we reached the termination ; char while assembling an attribute, cleanup and add
+  # it to the correct ets slot
   def handle_event(
         :internal,
         {:parse, <<?;, rem::binary>>},
@@ -899,7 +1030,8 @@ defmodule CSSEx.Parser do
         {:keep_state, Map.put(data, type, [Map.fetch!(data, type), char]),
          [{:next_event, :internal, {:parse, rem}}]}
 
-  # we reached the termination ; char while assembling a special attribute, @charset, cleanup and verify it's valid to add
+	# we reached the termination ; char while assembling a special attribute,
+	# @charset, cleanup and verify it's valid to add
   def handle_event(
         :internal,
         {:parse, <<?;, rem::binary>>},
@@ -916,7 +1048,8 @@ defmodule CSSEx.Parser do
     {:next_state, {:parse, :next}, new_data, [{:next_event, :internal, {:parse, rem}}]}
   end
 
-  # we reached the termination ; char while assembling a special attribute, @import, cleanup and verify it's valid to add
+  # we reached the termination ; char while assembling a special attribute, @import,
+  # cleanup and verify it's valid to add
   def handle_event(
         :internal,
         {:parse, <<?;, rem::binary>>},
@@ -944,10 +1077,12 @@ defmodule CSSEx.Parser do
         {:keep_state, %{inc_col(data) | current_value: [cval, char]},
          [{:next_event, :internal, {:parse, rem}}]}
 
-  # set the scope for whatever we're doing, scopes can only be set by when parsing variables or assigns if it's not nil there's a problem
+	# set the scope for whatever we're doing, scopes can only be set by when
+	# parsing variables or assigns if it's not nil there's a problem
   def set_scope(%{current_scope: nil} = data, scope), do: %{data | current_scope: scope}
 
-  # set var, it should be always false when this is called for the same reasons as set_scop
+  # set var, it should be always false when this is called for the same reasons as
+  # set_scope
   def set_add_var(%{current_add_var: false} = data), do: %{data | current_add_var: true}
 
   # add the variable to the global and local scopes
@@ -1003,8 +1138,7 @@ defmodule CSSEx.Parser do
 
         data
 
-      {:error, :not_declared} ->
-        %{data | valid?: false, error: "#{val} was not declared"}
+      {:error, {:not_declared, _, _} = error} -> add_error(data, error_msg(error))
     end
   end
 
@@ -1017,17 +1151,18 @@ defmodule CSSEx.Parser do
     case maybe_replace_val(val, data) do
       {:ok, new_val} ->
         cc_base = if(prefix, do: prefix ++ current_chain, else: current_chain)
-        cc = CSSEx.Helpers.Shared.ampersand_join(cc_base)
+        ccs = CSSEx.Helpers.Shared.split_chains(cc_base)
 
-        case :ets.lookup(ets, cc) do
-          [{_, existing}] -> :ets.insert(ets, {cc, [existing, key, ":", new_val, ";"]})
-          [] -> :ets.insert(ets, {cc, [key, ":", new_val, ";"]})
-        end
+	Enum.each(ccs, fn(cc) ->
+          case :ets.lookup(ets, cc) do
+            [{_, existing}] -> :ets.insert(ets, {cc, [existing, key, ":", new_val, ";"]})
+            [] -> :ets.insert(ets, {cc, [key, ":", new_val, ";"]})
+          end
+	end)
 
         data
 
-      {:error, :not_declared} ->
-        %{data | valid?: false, error: "#{val} was not declared"}
+      {:error, {:not_declared, _, _} = error} -> add_error(data, error_msg(error))
     end
   end
 
@@ -1056,44 +1191,9 @@ defmodule CSSEx.Parser do
         current_var: "",
         current_assign: "",
         current_scope: nil,
-        current_add_var: false
+      current_add_var: false,
+      current_function: ""
     }
-
-  # replaces the value if it mentions a cssex variable and that variable is bound in either the local_scope (first match) or the global scope (second match)
-  def maybe_replace_val(<<"@$$", var_name::binary>>, %{local_scope: ls})
-      when is_map_key(ls, var_name),
-      do: {:ok, Map.fetch!(ls, var_name)}
-
-  def maybe_replace_val(<<"@$$", var_name::binary>>, %{scope: scope})
-      when is_map_key(scope, var_name),
-      do: {:ok, Map.fetch!(scope, var_name)}
-
-  def maybe_replace_val(<<"@$$", var_name::binary>>, _data),
-    do: {:error, {:not_declared, var_name}}
-
-  def maybe_replace_val(val, data) do
-    case Regex.scan(~r/<\$(.+?)\$>/u, val) do
-      [] ->
-        {:ok, val}
-
-      tokens ->
-        Enum.reduce_while(tokens, {:ok, val}, fn [token, var_name], {_result, acc} ->
-          case var_name do
-            <<"@$$", _::binary>> ->
-              case maybe_replace_val(var_name, data) do
-                {:ok, replaced} -> {:cont, {:ok, String.replace(acc, token, replaced)}}
-                error -> {:halt, error}
-              end
-
-            _ ->
-              case maybe_replace_val("@$$" <> var_name, data) do
-                {:ok, replaced} -> {:cont, {:ok, String.replace(acc, token, replaced)}}
-                error -> {:halt, error}
-              end
-          end
-        end)
-    end
-  end
 
   def maybe_add_css_var(%{current_add_var: false} = data, _, _), do: data
 
@@ -1120,8 +1220,7 @@ defmodule CSSEx.Parser do
           {:ok, new_val} ->
             add_css_var(data, [":root"], ["--", key, ":", new_val, ";"])
 
-          {:error, {:not_declared, _}} ->
-            %{data | valid?: false, error: "#{val} was not declared"}
+          {:error, {:not_declared, _, _} = error} -> add_error(data, error_msg(error))
         end
 
       _ ->
@@ -1139,7 +1238,9 @@ defmodule CSSEx.Parser do
   end
 
   @doc """
-  Right now just checks if the charset has enclosing doube-quotes, ", might want to check if the value is actually a valid charset? https://www.iana.org/assignments/character-sets/character-sets.xhtml.
+  Right now just checks if the charset has enclosing doube-quotes, ", might want to
+  check if the value is actually a valid charset? 
+  https://www.iana.org/assignments/character-sets/character-sets.xhtml.
   """
   def validate_charset(%{current_value: charset, charset: nil, first_rule: true} = data) do
     new_charset =
@@ -1231,7 +1332,8 @@ defmodule CSSEx.Parser do
   end
 
   @doc """
-  Adds special rules like @charset to the stylesheet iodata_list, since those have to be in the beginning of the file to not be ignored by browser parsers. 
+  Adds special rules like @charset to the stylesheet iodata_list, since those have
+  to be in the beginning of the file to not be ignored by browser parsers. 
   """
   def add_last_special_attributes(data, iodata) do
     iodata
@@ -1287,7 +1389,8 @@ defmodule CSSEx.Parser do
   end
 
   @doc """
-  Adds a media query, taking care of translating the contents parsed in the upper level to the correct selectors
+  Adds a media query, taking care of translating the contents parsed in the upper
+  level to the correct selectors
   """
   def add_media_query(
         %{current_value: current_value, current_chain: _current_chain, media: media} = data,
@@ -1326,13 +1429,12 @@ defmodule CSSEx.Parser do
 
         %{data | media: new_media}
 
-      {:error, {:not_declared, val}} ->
-        add_error(data, "#{val} was not declared")
+      {:error, {:not_declared, _, _} = error} -> add_error(data, error_msg(error))
     end
   end
 
   @doc """
-  Adds a keyframe element, where the chain is simply ["@keyframe", animation_name]
+  Adds a keyframe element, where the chain is simply ["@keyframes", animation_name]
   """
   def add_keyframe(
         %{ets_keyframes: original_ets, current_value: current_value} = data,
@@ -1353,8 +1455,7 @@ defmodule CSSEx.Parser do
         :ets.delete(inner_ets)
         data
 
-      {:error, {:not_declared, val}} ->
-        add_error(data, "#{val} was not declared")
+      {:error, {:not_declared, _, _} = error} -> add_error(data, error_msg(error))
     end
   end
 
@@ -1369,7 +1470,8 @@ defmodule CSSEx.Parser do
           assigns: assigns,
           local_assigns: l_assigns,
           scope: scope,
-          local_scope: l_scope
+          local_scope: l_scope,
+	  functions: functions
         } = data,
         ets \\ nil,
         prefix \\ nil
@@ -1395,7 +1497,8 @@ defmodule CSSEx.Parser do
       ets_keyframes: etskf,
       font_face_count: ffc,
       local_assigns: inner_assigns,
-      local_scope: inner_scope
+      local_scope: inner_scope,
+      functions: functions
     }
   end
 
@@ -1427,35 +1530,22 @@ defmodule CSSEx.Parser do
   def add_to_dependencies(%{dependencies: deps} = data, val),
     do: %{data | dependencies: [val | deps]}
 
-  def stop_with_error(
-        %{line: line, column: column, answer_to: from} = data,
-        {:error, {:enoent, _} = error}
-      ) do
-    error_msg = msg_error(error, line, column)
-    new_data = %{data | valid?: false, error: error_msg}
-
+  def stop_with_error(%{answer_to: from} = data, {:error, error}) do
+    new_data = add_error(data, error_msg(error))
     {:stop_and_reply, new_data, [{:reply, from, new_data}]}
   end
 
-  def add_error(%{current_reg: [{s_line, s_col, step} | _], line: e_line, column: e_col} = data) do
-    error_translate =
-      case step do
-	{:terminator, char} when is_integer(char) -> <<"unable to find terminator for ", char>>
-	{:terminator, char} when is_binary(char) -> "unable to find terminator for #{char}"
-	_ -> "invalid #{inspect step} declaration"
-      end
-    
-    error_msg = "ERROR: #{error_translate} from l:#{s_line} col:#{s_col} to l:#{e_line} c:#{e_col}"
+  def add_error(%{current_reg: [{s_line, s_col, step} | _]} = data) do
+    final_error = "#{error_msg({:terminator, step})} at l:#{s_line} col:#{s_col} to"
 
-    %{data | valid?: false, error: error_msg}
+    add_error(%{data | current_reg: []}, final_error)
   end
 
   def add_error(%{line: line, column: column, current_reg: []} = data, error) do
     %{data | valid?: false, error: "#{inspect error} :: l:#{line} c:#{column}"}
   end
 
-  def msg_error({:enoent, file_path}, line, column),
-    do: "unable to open file: #{file_path} ::: l:#{line} c:#{column}"
+  
 
   def open_current(%{current_reg: creg, line: l, column: c} = data, element),
     do: %{data | current_reg: [{l, c, element} | creg]}
