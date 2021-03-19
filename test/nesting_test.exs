@@ -4,13 +4,13 @@ defmodule CSSEx.Nesting.Test do
 
   test "complex nestings" do
     css = """
-    
+
     .div_1 {
       color: red;
       .div_1_a, .div_1_b {
         color: blue;
       }
-    
+
       &.div_2_a, .div_2_b {
         width: 100%;
       	&.div_2_a_a {
@@ -34,6 +34,7 @@ defmodule CSSEx.Nesting.Test do
       }
     }
     """
+
     assert {:ok, _, parsed} = Parser.parse(css)
 
     assert parsed =~ ".div_1{color:red;}"

@@ -97,7 +97,9 @@ defmodule CSSEx.File.Test do
            end)
   end
 
-  test "entry points when the folder doesn't exist still work and pick up once its created", %{non_existing: non_existing_path} do
+  test "entry points when the folder doesn't exist still work and pick up once its created", %{
+    non_existing: non_existing_path
+  } do
     base_path = Path.join(["test", "files", "non_existing", "test_1.cssex"])
     final_path = Path.join(["test", "files", "non_existing", "test_1.css"])
     entry_points = Map.put(%{}, base_path, final_path)
@@ -105,7 +107,7 @@ defmodule CSSEx.File.Test do
 
     assert :ready = :gen_statem.call(pid, :status)
     refute File.exists?(non_existing_path)
-    
+
     assert :ok = File.mkdir(non_existing_path)
     assert :ready = :gen_statem.call(pid, :status)
 
@@ -113,7 +115,7 @@ defmodule CSSEx.File.Test do
     to_write = ".write{color:red;}"
     IO.write(base_handler, to_write)
     assert :ok = File.close(base_handler)
-    
+
     assert Enum.reduce_while(Stream.cycle([1]), 0, fn _, acc ->
              case Integer.mod(acc, 5) do
                _ when acc == 50 ->
@@ -126,16 +128,20 @@ defmodule CSSEx.File.Test do
 
                _ ->
                  assert :ready = :gen_statem.call(pid, :status)
+
                  case File.read(final_path) do
-		   {:ok, result} ->
-		     case result == to_write <> "\n" do
-		       true -> {:halt, true}
-		       _ ->
-			 Process.sleep(200)
-			 {:cont, acc + 1}
-		     end
-		   _ ->
-		     Process.sleep(200)
+                   {:ok, result} ->
+                     case result == to_write <> "\n" do
+                       true ->
+                         {:halt, true}
+
+                       _ ->
+                         Process.sleep(200)
+                         {:cont, acc + 1}
+                     end
+
+                   _ ->
+                     Process.sleep(200)
                      {:cont, acc + 1}
                  end
              end

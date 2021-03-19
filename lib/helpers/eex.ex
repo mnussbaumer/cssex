@@ -8,6 +8,7 @@ defmodule CSSEx.Helpers.EEX do
 
   def parse(rem, data) do
     new_data = open_current(data, :eex)
+
     case do_parse(rem, new_data, %__MODULE__{}) do
       {:ok, {_, _} = result} -> result
       {:error, _new_data} = error -> error
@@ -31,7 +32,7 @@ defmodule CSSEx.Helpers.EEX do
       end
 
     line_correction = calc_line_offset(state, final)
-    
+
     {:ok, {final <> rem, %{close_current(data) | line: line + line_correction}}}
   rescue
     error ->
@@ -51,7 +52,7 @@ defmodule CSSEx.Helpers.EEX do
       data
       |> inc_line(line)
       |> inc_col(col)
-    
+
     {:error, new_data}
   end
 

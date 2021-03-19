@@ -12,8 +12,8 @@ defmodule CSSEx.Function.Test do
     new_l = 
       case l + percentage do
          n_l when n_l <= 100 and n_l >= 0 -> n_l
-	 n_l when n_l > 100 -> 100
-	 n_l when n_l < 0 -> 0
+  n_l when n_l > 100 -> 100
+  n_l when n_l < 0 -> 0
       end
 
     {:ok, %CSSEx.HSLA{hsla | l: %CSSEx.Unit{l_unit | value: new_l}} |> to_string}
@@ -26,9 +26,9 @@ defmodule CSSEx.Function.Test do
 
   test "basic & works" do
     assert {
-      :ok,
-      _,
-      ".test{color:hsla(0,100%,60%,1.0);color:hsla(300,7%,15%,1.0);}\n"
-    } = Parser.parse(@basic)
+             :ok,
+             _,
+             ".test{color:hsla(0,100%,60%,1.0);color:hsla(300,7%,15%,1.0);}\n"
+           } = Parser.parse(@basic)
   end
 end

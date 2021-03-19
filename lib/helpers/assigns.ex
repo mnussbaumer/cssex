@@ -20,7 +20,7 @@ defmodule CSSEx.Helpers.Assigns do
       new_data =
         data
         |> add_assign(ckey, final_val)
-	|> close_current()
+        |> close_current()
         |> inc_line()
 
       {rem, new_data}

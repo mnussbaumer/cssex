@@ -1,5 +1,4 @@
 defmodule CSSEx.Helpers.Interpolations do
-
   # replaces the value if it mentions a cssex variable and that variable is bound
   # in either the local_scope (first match) or the global scope (second match)
   def maybe_replace_val(<<"@$$", var_name::binary>>, %{local_scope: ls})
@@ -28,7 +27,8 @@ defmodule CSSEx.Helpers.Interpolations do
               end
 
             _ ->
-	      trimmed = String.trim(var_name)
+              trimmed = String.trim(var_name)
+
               case maybe_replace_val("@$$" <> trimmed, data) do
                 {:ok, replaced} -> {:cont, {:ok, String.replace(acc, token, replaced)}}
                 error -> {:halt, error}
@@ -54,13 +54,14 @@ defmodule CSSEx.Helpers.Interpolations do
 
   def maybe_replace_arg(<<"<$", _::binary>> = full, data) do
     case Regex.run(~r/<\$(.+?)\$>/u, full) do
-      [] -> {:error, {:invalid_argument, full}}
+      [] ->
+        {:error, {:invalid_argument, full}}
+
       [_, token] ->
-	trimmed = String.trim(token)
-	maybe_replace_val("@$$" <> token, data)
+        trimmed = String.trim(token)
+        maybe_replace_val("@$$" <> token, data)
     end
   end
 
   def maybe_replace_arg(val, _), do: {:ok, val}
-  
 end

@@ -7,7 +7,7 @@ defmodule CSSEx.Error.Test do
     %!width 576px
     div { color: red; }
     """
-    
+
     assert {:error, {_, %{error: error}}} = Parser.parse(css)
     assert error =~ "invalid :assign declaration at l:1 col:1 to\" :: l:3 c:0"
   end
@@ -18,7 +18,7 @@ defmodule CSSEx.Error.Test do
        color: red;
     }
     """
-    
+
     assert {:error, {_, %{error: error}}} = Parser.parse(css_1)
     assert error =~ "unable to find terminator for \\\" at l:1 col:14 to\" :: l:4 c:0"
 
@@ -27,7 +27,7 @@ defmodule CSSEx.Error.Test do
        color: red;
     }
     """
-    
+
     assert {:error, {_, %{error: error}}} = Parser.parse(css_2)
     assert error =~ "unable to find terminator for [ at l:1 col:3 to\" :: l:4 c:0"
   end
@@ -40,6 +40,7 @@ defmodule CSSEx.Error.Test do
     sodjfjfgjg
     end
     """
+
     assert {:error, {_, %{error: error}}} = Parser.parse(css)
     assert error =~ "invalid :eex declaration at l:2 col:0 to\" :: l:6 c:0"
   end
@@ -53,5 +54,4 @@ defmodule CSSEx.Error.Test do
     assert {:error, {_, %{error: error}}} = Parser.parse(css)
     assert error =~ "invalid :variable declaration at l:1 col:1 to\" :: l:1 c:6"
   end
-
 end
