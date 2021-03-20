@@ -355,22 +355,6 @@ In terms of speed, although I haven't done extensive benchmarking as I want firs
 
 ## Roadmap
 
-- Implement custom functions definition that cascade through the files as right now variables and assigns do. Still thinking on the syntax, probably something like:
-
-```
-@fn name(arg1, arg2) {
-  //...
-};
-```
-
-and called as:
-
-```
-div {
-    color: @fn::name(red, blue);
-}
-```
-
 - Basic functions such as: `lighten`, `darken`, etc.;
 - Mix task for parsing CSSEx files
 
