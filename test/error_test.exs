@@ -8,7 +8,7 @@ defmodule CSSEx.Error.Test do
     div { color: red; }
     """
 
-    assert {:error, {_, %{error: error}}} = Parser.parse(css)
+    assert {:error, %{error: error}} = Parser.parse(css)
     assert error =~ "invalid :assign declaration at l:1 col:1 to\" :: l:3 c:0"
   end
 
@@ -19,7 +19,7 @@ defmodule CSSEx.Error.Test do
     }
     """
 
-    assert {:error, {_, %{error: error}}} = Parser.parse(css_1)
+    assert {:error, %{error: error}} = Parser.parse(css_1)
     assert error =~ "unable to find terminator for \\\" at l:1 col:14 to\" :: l:4 c:0"
 
     css_2 = """
@@ -28,7 +28,7 @@ defmodule CSSEx.Error.Test do
     }
     """
 
-    assert {:error, {_, %{error: error}}} = Parser.parse(css_2)
+    assert {:error, %{error: error}} = Parser.parse(css_2)
     assert error =~ "unable to find terminator for [ at l:1 col:3 to\" :: l:4 c:0"
   end
 
@@ -41,7 +41,7 @@ defmodule CSSEx.Error.Test do
     end
     """
 
-    assert {:error, {_, %{error: error}}} = Parser.parse(css)
+    assert {:error, %{error: error}} = Parser.parse(css)
     assert error =~ "invalid :eex declaration at l:2 col:0 to\" :: l:6 c:0"
   end
 
@@ -51,7 +51,27 @@ defmodule CSSEx.Error.Test do
     @!test 2;
     """
 
-    assert {:error, {_, %{error: error}}} = Parser.parse(css)
+    assert {:error, %{error: error}} = Parser.parse(css)
     assert error =~ "invalid :variable declaration at l:1 col:1 to\" :: l:1 c:6"
+  end
+
+  test "nested media bug #8 should provide an error" do
+    assert {:error, %{error: error}} = Parser.parse(
+    """
+    @media only screen {
+      header nav a {
+        display: block;
+    	color: white;
+    	text-decoration: none;
+    
+        a:focus, a:hover {
+          color: #000;
+    	};
+      }
+    }
+    """
+    )
+
+    assert error =~ "unexpected token: ;  \" :: l:10 c:0"
   end
 end
