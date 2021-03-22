@@ -11,14 +11,16 @@ defmodule CSSEx.Helpers.Shared do
   def generate_prefix(%{current_chain: cc, prefix: prefix}), do: prefix ++ cc
 
   # we only have one element but we do have a prefix, set the split chain to the prefix and reset the current_chain
-  def remove_last_from_chain(%{current_chain: [_], prefix: prefix} = data) when not is_nil(prefix), do: %{data | current_chain: [], split_chain: [prefix]}
-  
+  def remove_last_from_chain(%{current_chain: [_], prefix: prefix} = data)
+      when not is_nil(prefix),
+      do: %{data | current_chain: [], split_chain: [prefix]}
+
   # we only have one element so reset both chains
   def remove_last_from_chain(%{current_chain: [_]} = data),
     do: %{data | current_chain: [], split_chain: []}
 
   # we have more than one
-  def remove_last_from_chain(%{current_chain: [_|_] = chain, prefix: prefix} = data) do
+  def remove_last_from_chain(%{current_chain: [_ | _] = chain, prefix: prefix} = data) do
     [_ | new_chain] = :lists.reverse(chain)
     new_chain = :lists.reverse(new_chain)
 
@@ -26,12 +28,13 @@ defmodule CSSEx.Helpers.Shared do
   end
 
   def add_selector_to_chain(%{current_chain: cc, prefix: prefix} = data, selector) do
-    new_chain = [selector | :lists.reverse(cc)] |> :lists.reverse
+    new_chain = [selector | :lists.reverse(cc)] |> :lists.reverse()
+
     new_split =
       case new_chain do
-	[_] when is_nil(prefix) -> [new_chain]
-	[_] -> [prefix ++ new_chain]
-	_ -> split_chains(new_chain, prefix)
+        [_] when is_nil(prefix) -> [new_chain]
+        [_] -> [prefix ++ new_chain]
+        _ -> split_chains(new_chain, prefix)
       end
 
     %{data | current_chain: new_chain, split_chain: new_split}
@@ -50,15 +53,17 @@ defmodule CSSEx.Helpers.Shared do
 
   def split_chains([], acc, prefix) do
     Enum.map(acc, fn
-      chain when is_list(chain) -> 
-	final =  :lists.flatten(chain)
-      if(prefix, do: prefix ++ final, else: final)
-      |> ampersand_join()
-      
-      chain -> if(prefix, do: [prefix ++ [chain]], else: [chain])
+      chain when is_list(chain) ->
+        final = :lists.flatten(chain)
+
+        if(prefix, do: prefix ++ final, else: final)
+        |> ampersand_join()
+
+      chain ->
+        if(prefix, do: [prefix ++ [chain]], else: [chain])
     end)
   end
-      
+
   def split_chains([head | t], [], prefix) do
     splits =
       head
