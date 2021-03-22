@@ -1,7 +1,9 @@
 defmodule CSSEx.Parser do
-  import CSSEx.Helpers.Shared, only: [inc_col: 1, inc_col: 2, inc_line: 1]
+  import CSSEx.Helpers.Shared, only: [inc_col: 1, inc_col: 2, inc_line: 1, remove_last_from_chain: 1]
   import CSSEx.Helpers.Interpolations, only: [maybe_replace_val: 2]
   import CSSEx.Helpers.Error, only: [error_msg: 1]
+
+  alias CSSEx.Helpers.Shared, as: HShared
 
   @behaviour :gen_statem
 
@@ -26,6 +28,7 @@ defmodule CSSEx.Parser do
     assigns: %{},
     local_assigns: %{},
     current_chain: [],
+    split_chain: [[]],
     valid?: true,
     current_key: "",
     current_value: "",
@@ -92,6 +95,7 @@ defmodule CSSEx.Parser do
   def parse(content) do
     {:ok, pid} = __MODULE__.start_link()
     :gen_statem.call(pid, {:start, content})
+
   end
 
   def parse(%__MODULE__{} = data, content) do
@@ -184,8 +188,8 @@ defmodule CSSEx.Parser do
 
   # we are in an invalid parsing state, abort and return an error with the current
   # state and data
-  def handle_event(:internal, {:parse, _}, state, %{valid?: false, answer_to: from} = data),
-    do: {:stop_and_reply, :normal, [{:reply, from, {:error, {state, data}}}]}
+  def handle_event(:internal, {:parse, _}, _state, %{valid?: false, answer_to: from} = data),
+    do: {:stop_and_reply, :normal, [{:reply, from, {:error, data}}]}
 
   # we have reached the end of the binary, there's nothing else to do except answer
   # the caller, if we're in something else than {:parse, :next} it's an error
@@ -197,7 +201,7 @@ defmodule CSSEx.Parser do
       _ ->
         {:stop_and_reply, :normal,
          [
-           {:reply, from, {:error, {state, add_error(data)}}}
+           {:reply, from, {:error, add_error(data)}}
          ]}
     end
   end
@@ -437,13 +441,12 @@ defmodule CSSEx.Parser do
         :internal,
         {:parse, <<125, rem::binary>>},
         {:parse, :next},
-        %{current_chain: [_ | _] = cc} = data
-      ) do
-    [_ | new_cc_1] = :lists.reverse(cc)
-    new_cc_2 = :lists.reverse(new_cc_1)
+        %{current_chain: [_ | _]} = data
+  ) do
 
     new_data =
-      %{data | current_chain: new_cc_2}
+      data
+      |> remove_last_from_chain()
       |> close_current()
       |> inc_col()
 
@@ -455,11 +458,11 @@ defmodule CSSEx.Parser do
   def handle_event(
         :internal,
         {:parse, <<125, _::binary>>},
-        {:parse, :next} = state,
-        %{answer_to: from, current_chain: [], line: line, column: col, level: 0} = data
+        {:parse, :next},
+        %{answer_to: from, current_chain: [], level: 0} = data
       ) do
-    new_data = %{data | valid?: false, error: "Mismatched } at l:#{line} c:#{col}"}
-    {:stop_and_reply, :normal, [{:reply, from, {:error, {state, new_data}}}]}
+    new_data = add_error(data, error_msg({:mismatched, "}"}))
+    {:stop_and_reply, :normal, [{:reply, from, {:error, new_data}}]}
   end
 
   # we reached a closing bracket without being inside a block in an inner level, inc
@@ -795,7 +798,7 @@ defmodule CSSEx.Parser do
         data
       ) do
     inner_data = create_data_for_inner(data, false, nil)
-
+    
     case __MODULE__.parse(inner_data, rem) do
       {:finished, {%{column: n_col, line: n_line} = new_inner_data, new_rem}} ->
         new_data =
@@ -949,26 +952,35 @@ defmodule CSSEx.Parser do
         {:parse, <<?;, rem::binary>>},
         {:parse, :current_key},
         %{current_key: current_key} = data
-      ) do
-    [key, val] =
-      current_key
-      |> IO.iodata_to_binary()
-      |> String.split(":", parts: 2)
-
-    ckey = String.trim(key)
-    cval = String.trim(val)
-
-    ## TODO add checks on attribute & value, emit warnings if invalid;
-
-    new_data =
-      data
-      |> add_to_attributes(ckey, cval)
-      |> close_current()
-      |> reset_current()
-      |> inc_col()
-      |> first_rule()
-
-    {:next_state, {:parse, :next}, new_data, [{:next_event, :internal, {:parse, rem}}]}
+  ) do
+    #IO.inspect(data)
+    #IO.inspect(fold_attributes_table(data.ets))
+    
+    current_key
+    |> IO.iodata_to_binary()
+    |> String.split(":", parts: 2)
+    |> case do
+	 [key, val] ->
+	   ckey = String.trim(key)
+	   cval = String.trim(val)
+	   
+	   ## TODO add checks on attribute & value, emit warnings if invalid;
+	   
+	   new_data = (
+	     data
+	     |> add_to_attributes(ckey, cval)
+	     |> close_current()
+	     |> reset_current()
+	     |> inc_col()
+	     |> first_rule()
+	   )
+	   
+	   {:next_state, {:parse, :next}, new_data, [{:next_event, :internal, {:parse, rem}}]}
+	   # this is probably a misplaced token we should error out
+	   unexpected ->
+	   error_msg = error_msg({:unexpected, IO.iodata_to_binary(unexpected)})
+	   {:next_state, {:parse, :next}, add_error(data, error_msg), [{:next_event, :internal, {:parse, rem}}]}
+       end
   end
 
   def handle_event(
@@ -1143,19 +1155,19 @@ defmodule CSSEx.Parser do
 
   # add attribute to the ETS table
   def add_to_attributes(
-        %{ets: ets, current_chain: current_chain, prefix: prefix} = data,
+        %{ets: ets, split_chain: split_chain} = data,
         key,
         val
       ) do
     case maybe_replace_val(val, data) do
       {:ok, new_val} ->
-        cc_base = if(prefix, do: prefix ++ current_chain, else: current_chain)
-        ccs = CSSEx.Helpers.Shared.split_chains(cc_base)
 
-        Enum.each(ccs, fn cc ->
+        Enum.each(split_chain, fn cc ->
           case :ets.lookup(ets, cc) do
-            [{_, existing}] -> :ets.insert(ets, {cc, [existing, key, ":", new_val, ";"]})
-            [] -> :ets.insert(ets, {cc, [key, ":", new_val, ";"]})
+            [{_, existing}] ->
+	      :ets.insert(ets, {cc, [existing, key, ":", new_val, ";"]})
+            [] ->
+	      :ets.insert(ets, {cc, [key, ":", new_val, ";"]})
           end
         end)
 
@@ -1170,12 +1182,12 @@ defmodule CSSEx.Parser do
   def add_current_selector(%{font_face: true} = data), do: data
 
   # add the current_selector to the current_chain
-  def add_current_selector(%{current_chain: cc, current_key: cs} = data) do
+  def add_current_selector(%{current_key: cs} = data) do
     current_selector = String.trim_trailing(IO.iodata_to_binary(cs))
 
     case maybe_replace_val(current_selector, data) do
       {:ok, replaced_selector} ->
-        Map.put(data, :current_chain, cc ++ [replaced_selector])
+        HShared.add_selector_to_chain(data, replaced_selector)
 
       _ ->
         %{data | valid?: false, error: "variable in #{current_selector} was not declared"}
@@ -1394,8 +1406,8 @@ defmodule CSSEx.Parser do
   level to the correct selectors
   """
   def add_media_query(
-        %{current_value: current_value, current_chain: _current_chain, media: media} = data,
-        %{ets: inner_ets} = _new_inner_data
+        %{current_value: current_value, media: media} = data,
+        %{ets: inner_ets}
       ) do
     parsed = IO.iodata_to_binary(current_value)
     {parsed_2, data} = CSSEx.Helpers.Media.parse(parsed, data)
@@ -1490,6 +1502,8 @@ defmodule CSSEx.Parser do
     inner_assigns = Map.merge(assigns, l_assigns)
     inner_scope = Map.merge(scope, l_scope)
 
+    inner_split_chain = [if(inner_prefix, do: inner_prefix, else: [])]
+
     %__MODULE__{
       ets: inner_ets,
       line: line,
@@ -1501,7 +1515,8 @@ defmodule CSSEx.Parser do
       font_face_count: ffc,
       local_assigns: inner_assigns,
       local_scope: inner_scope,
-      functions: functions
+      functions: functions,
+      split_chain: inner_split_chain
     }
   end
 
@@ -1542,9 +1557,12 @@ defmodule CSSEx.Parser do
   def add_to_dependencies(%{dependencies: deps} = data, val),
     do: %{data | dependencies: [val | deps]}
 
+  def stop_with_error(%{answer_to: from}, {:error, %__MODULE__{} = invalid}),
+   do: {:stop_and_reply, invalid, [{:reply, from, {:error, invalid}}]}
+  
   def stop_with_error(%{answer_to: from} = data, {:error, error}) do
     new_data = add_error(data, error_msg(error))
-    {:stop_and_reply, new_data, [{:reply, from, new_data}]}
+    {:stop_and_reply, new_data, [{:reply, from, {:error, new_data}}]}
   end
 
   def add_error(%{current_reg: [{s_line, s_col, step} | _]} = data) do
@@ -1553,7 +1571,7 @@ defmodule CSSEx.Parser do
     add_error(%{data | current_reg: []}, final_error)
   end
 
-  def add_error(%{line: line, column: column, current_reg: []} = data, error) do
+  def add_error(%{line: line, column: column} = data, error) do
     %{data | valid?: false, error: "#{inspect(error)} :: l:#{line} c:#{column}"}
   end
 
@@ -1561,4 +1579,5 @@ defmodule CSSEx.Parser do
     do: %{data | current_reg: [{l, c, element} | creg]}
 
   def close_current(%{current_reg: [_ | t]} = data), do: %{data | current_reg: t}
+  def close_current(%{current_reg: [], level: level} = data) when level > 0, do: data
 end

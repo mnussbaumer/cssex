@@ -45,40 +45,6 @@ button .class_1  { color: yellow; }
 button.concatenated_class { padding: 10px; }
 ```
 
-#### Functions
-
-```elixir
-
-@fn lighten(color, percentage) {
-    {:ok, %CSSEx.HSLA{l: %CSSEx.Unit{value: l} = l_unit} = hsla} = 
-                                                       CSSEx.HSLA.new_hsla(color)
-
-    {percentage, _} = Float.parse(percentage)
-
-    new_l = 
-      case l + percentage do
-         n_l when n_l <= 100 and n_l >= 0 -> n_l
-	 n_l when n_l > 100 -> 100
-	 n_l when n_l < 0 -> 0
-      end
-
-    {:ok, %CSSEx.HSLA{hsla | l: %CSSEx.Unit{l_unit | value: new_l}} |> to_string}
-};
-
-@!red red;
-.test{color: @fn::lighten(<$red$>, 10)}
-.test{color: @fn::lighten(#fdf, 10);}
-```
-
-##### into
-
-```css
-.test {
-  color: hsla(0,100%,60%,1.0);
-  color: hsla(300,7%,15%,1.0);
-}
-```
-
 #### Variables
 
 ```css
@@ -184,6 +150,41 @@ div { font-size: 20px; }
 
 These scope ruling might still be changed regarding the scoped workings and the undefined versions. Variables are inserted always using the interpolation markers, `<$ variable_name $>`.
 
+
+#### Functions
+
+```elixir
+
+@fn lighten(color, percentage) {
+    {:ok, %CSSEx.HSLA{l: %CSSEx.Unit{value: l} = l_unit} = hsla} = 
+                                                       CSSEx.HSLA.new_hsla(color)
+
+    {percentage, _} = Float.parse(percentage)
+
+    new_l = 
+      case l + percentage do
+         n_l when n_l <= 100 and n_l >= 0 -> n_l
+	 n_l when n_l > 100 -> 100
+	 n_l when n_l < 0 -> 0
+      end
+
+    {:ok, %CSSEx.HSLA{hsla | l: %CSSEx.Unit{l_unit | value: new_l}} |> to_string}
+};
+
+@!red red;
+.test{color: @fn::lighten(<$red$>, 10)}
+.test{color: @fn::lighten(#fdf, 10);}
+```
+
+##### into
+
+```css
+.test {
+  color: hsla(0,100%,60%,1.0);
+  color: hsla(300,7%,15%,1.0);
+}
+```
+
 #### Assigns
 
 Assigns are as if variables and they have the same options and scoping as that of variables, but instead of being `@!`, `@*!`, `@()` and `@?`, they're identified by `%!`, `%()` and `%?`.
@@ -220,6 +221,10 @@ An EEx block has to return either a binary (a String.t) or an iodata list. When 
 <div id="caveats"></div>
 
 ### Caveats
+
+Some details like scoping rules and what scope identifiers will be available is still open ended.
+
+Postfixing operators with the & concatenator is still not working and I'm still considering if introducing them is really worthwile. 
 
 Due to the way it parses and builds output the final CSS files avoid a lot of repetition. It doesn't parse and insert the parsed result in place, instead it builds a table of selectors -> attributes and while parsing rules adds them to that selector. The order of the attributes for a selector is guaranteed, but the final layout of the selectors themselves is not.
 
@@ -355,6 +360,8 @@ In terms of speed, although I haven't done extensive benchmarking as I want firs
 
 ## Roadmap
 
+- Define the scoping rules and possibilities for variables, assigns, and functions
+- Finalize the `&` usage when placed as postfix
 - Basic functions such as: `lighten`, `darken`, etc.;
 - Mix task for parsing CSSEx files
 

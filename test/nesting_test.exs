@@ -46,15 +46,13 @@ defmodule CSSEx.Nesting.Test do
     assert parsed =~ ".div_1.div_3_b{margin:10px;}"
 
     # this needs to be better 
-    assert parsed =~ ".box-1{color:magenta;}"
+    assert parsed =~ ".box-1, .box-2, .box-3{color:magenta;}"
     assert parsed =~ ".box-1.box-4{height:50px;}"
     assert parsed =~ ".box-1 .box-5{height:50px;}"
 
-    assert parsed =~ ".box-2{color:magenta;}"
     assert parsed =~ ".box-2.box-4{height:50px;}"
     assert parsed =~ ".box-2 .box-5{height:50px;}"
 
-    assert parsed =~ ".box-3{color:magenta;}"
     assert parsed =~ ".box-3.box-4{height:50px;}"
     assert parsed =~ ".box-3 .box-5{height:50px;}"
   end
