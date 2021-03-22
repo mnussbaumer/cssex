@@ -1,5 +1,7 @@
 defmodule CSSEx.Parser do
-  import CSSEx.Helpers.Shared, only: [inc_col: 1, inc_col: 2, inc_line: 1, remove_last_from_chain: 1]
+  import CSSEx.Helpers.Shared,
+    only: [inc_col: 1, inc_col: 2, inc_line: 1, remove_last_from_chain: 1]
+
   import CSSEx.Helpers.Interpolations, only: [maybe_replace_val: 2]
   import CSSEx.Helpers.Error, only: [error_msg: 1]
 
@@ -95,7 +97,6 @@ defmodule CSSEx.Parser do
   def parse(content) do
     {:ok, pid} = __MODULE__.start_link()
     :gen_statem.call(pid, {:start, content})
-
   end
 
   def parse(%__MODULE__{} = data, content) do
@@ -442,8 +443,7 @@ defmodule CSSEx.Parser do
         {:parse, <<125, rem::binary>>},
         {:parse, :next},
         %{current_chain: [_ | _]} = data
-  ) do
-
+      ) do
     new_data =
       data
       |> remove_last_from_chain()
@@ -798,7 +798,7 @@ defmodule CSSEx.Parser do
         data
       ) do
     inner_data = create_data_for_inner(data, false, nil)
-    
+
     case __MODULE__.parse(inner_data, rem) do
       {:finished, {%{column: n_col, line: n_line} = new_inner_data, new_rem}} ->
         new_data =
@@ -952,35 +952,37 @@ defmodule CSSEx.Parser do
         {:parse, <<?;, rem::binary>>},
         {:parse, :current_key},
         %{current_key: current_key} = data
-  ) do
-    #IO.inspect(data)
-    #IO.inspect(fold_attributes_table(data.ets))
-    
+      ) do
+    # IO.inspect(data)
+    # IO.inspect(fold_attributes_table(data.ets))
+
     current_key
     |> IO.iodata_to_binary()
     |> String.split(":", parts: 2)
     |> case do
-	 [key, val] ->
-	   ckey = String.trim(key)
-	   cval = String.trim(val)
-	   
-	   ## TODO add checks on attribute & value, emit warnings if invalid;
-	   
-	   new_data = (
-	     data
-	     |> add_to_attributes(ckey, cval)
-	     |> close_current()
-	     |> reset_current()
-	     |> inc_col()
-	     |> first_rule()
-	   )
-	   
-	   {:next_state, {:parse, :next}, new_data, [{:next_event, :internal, {:parse, rem}}]}
-	   # this is probably a misplaced token we should error out
-	   unexpected ->
-	   error_msg = error_msg({:unexpected, IO.iodata_to_binary(unexpected)})
-	   {:next_state, {:parse, :next}, add_error(data, error_msg), [{:next_event, :internal, {:parse, rem}}]}
-       end
+      [key, val] ->
+        ckey = String.trim(key)
+        cval = String.trim(val)
+
+        ## TODO add checks on attribute & value, emit warnings if invalid;
+
+        new_data =
+          data
+          |> add_to_attributes(ckey, cval)
+          |> close_current()
+          |> reset_current()
+          |> inc_col()
+          |> first_rule()
+
+        {:next_state, {:parse, :next}, new_data, [{:next_event, :internal, {:parse, rem}}]}
+
+      # this is probably a misplaced token we should error out
+      unexpected ->
+        error_msg = error_msg({:unexpected, IO.iodata_to_binary(unexpected)})
+
+        {:next_state, {:parse, :next}, add_error(data, error_msg),
+         [{:next_event, :internal, {:parse, rem}}]}
+    end
   end
 
   def handle_event(
@@ -1161,13 +1163,13 @@ defmodule CSSEx.Parser do
       ) do
     case maybe_replace_val(val, data) do
       {:ok, new_val} ->
-
         Enum.each(split_chain, fn cc ->
           case :ets.lookup(ets, cc) do
             [{_, existing}] ->
-	      :ets.insert(ets, {cc, [existing, key, ":", new_val, ";"]})
+              :ets.insert(ets, {cc, [existing, key, ":", new_val, ";"]})
+
             [] ->
-	      :ets.insert(ets, {cc, [key, ":", new_val, ";"]})
+              :ets.insert(ets, {cc, [key, ":", new_val, ";"]})
           end
         end)
 
@@ -1558,8 +1560,8 @@ defmodule CSSEx.Parser do
     do: %{data | dependencies: [val | deps]}
 
   def stop_with_error(%{answer_to: from}, {:error, %__MODULE__{} = invalid}),
-   do: {:stop_and_reply, invalid, [{:reply, from, {:error, invalid}}]}
-  
+    do: {:stop_and_reply, invalid, [{:reply, from, {:error, invalid}}]}
+
   def stop_with_error(%{answer_to: from} = data, {:error, error}) do
     new_data = add_error(data, error_msg(error))
     {:stop_and_reply, new_data, [{:reply, from, {:error, new_data}}]}
