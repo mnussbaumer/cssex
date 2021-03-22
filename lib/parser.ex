@@ -207,6 +207,30 @@ defmodule CSSEx.Parser do
     end
   end
 
+  # handle comments
+  ["//", "/*"]
+  |> Enum.each(fn chars ->
+    def handle_event(
+          :internal,
+          {:parse, <<unquote(chars), rem::binary>>},
+          _state,
+          data
+        ) do
+      new_data =
+        data
+        |> inc_col(2)
+        |> open_current(:comment)
+
+      case CSSEx.Helpers.Comments.parse(rem, new_data, unquote(chars)) do
+        {:ok, {new_data, new_rem}} ->
+          {:keep_state, close_current(new_data), [{:next_event, :internal, {:parse, new_rem}}]}
+
+        {:error, new_data} ->
+          {:keep_state, new_data, [{:next_event, :internal, {:parse, rem}}]}
+      end
+    end
+  end)
+
   # Handle a function call, this is on top of everything as when outside EEx blocks,
   # meaning normal parsing, it should be replaced by the return value of the function
   # we parse from @fn:: ... to the end of the declaration ")", we do it the Function
