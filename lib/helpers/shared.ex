@@ -1,4 +1,7 @@
 defmodule CSSEx.Helpers.Shared do
+  alias CSSEx.Helpers.Error
+  @appendable_first_char CSSEx.Helpers.SelectorChars.appendable_first_char()
+
   # increment the column token count
   def inc_col(%{column: column} = data, amount \\ 1),
     do: %{data | column: column + amount}
@@ -24,7 +27,13 @@ defmodule CSSEx.Helpers.Shared do
     [_ | new_chain] = :lists.reverse(chain)
     new_chain = :lists.reverse(new_chain)
 
-    %{data | current_chain: new_chain, split_chain: split_chains(new_chain, prefix)}
+    case split_chains(new_chain, prefix) do
+      [_ | _] = splitted ->
+        %{data | current_chain: new_chain, split_chain: splitted}
+
+      {:error, error} ->
+        CSSEx.Parser.add_error(data, Error.error_msg(error))
+    end
   end
 
   def add_selector_to_chain(%{current_chain: cc, prefix: prefix} = data, selector) do
@@ -37,31 +46,98 @@ defmodule CSSEx.Helpers.Shared do
         _ -> split_chains(new_chain, prefix)
       end
 
-    %{data | current_chain: new_chain, split_chain: new_split}
+    case new_split do
+      [_ | _] ->
+        %{data | current_chain: new_chain, split_chain: new_split}
+
+      {:error, error} ->
+        CSSEx.Parser.add_error(data, Error.error_msg(error))
+    end
   end
 
   def ampersand_join(initial), do: ampersand_join(initial, [])
 
-  def ampersand_join([head, <<"&", rem::binary>> | t], acc),
-    do: ampersand_join([head <> rem | t], acc)
+  def ampersand_join([<<"&", rem::binary>> | _], []),
+    do: throw({:error, {:invalid_parent_concat, rem}})
 
-  def ampersand_join([head | t], acc), do: ampersand_join(t, [acc | [head]])
+  def ampersand_join([head, <<"&", rem::binary>> | t], acc) do
+    case is_trail_concat(rem) do
+      true ->
+        ampersand_join([head <> rem | t], acc)
+
+      false ->
+        case is_lead_concat(head) do
+          true ->
+            ampersand_join([rem <> head | t], acc)
+
+          false ->
+            throw({:error, {:invalid_component_concat, rem, head}})
+        end
+    end
+  end
+
+  def ampersand_join([head | t], acc) do
+    case Regex.split(~r/.?(?<amper>\(?&\)?).?$/, head,
+           include_captures: true,
+           on: [:amper],
+           trim: true
+         ) do
+      [parent, "&"] ->
+        case :lists.reverse(acc) do
+          [previous | rem] ->
+            new_acc = :lists.reverse([previous, String.trim(parent) | rem])
+            ampersand_join(t, new_acc)
+
+          _ ->
+            throw({:error, {:invalid_parent_concat, parent}})
+        end
+
+      [pseudo, "(&)"] ->
+        case :lists.reverse(acc) do
+          [previous | rem] ->
+            new_acc = :lists.reverse(["#{pseudo}(#{previous})" | rem])
+            ampersand_join(t, new_acc)
+
+          _ ->
+            throw({:error, {:invalid_parent_concat, pseudo}})
+        end
+
+      [_] ->
+        ampersand_join(t, [acc | [head]])
+    end
+  end
 
   def ampersand_join([], acc), do: :lists.flatten(acc)
+
+  Enum.each(@appendable_first_char, fn char ->
+    def is_trail_concat(<<unquote(char), _::binary>>), do: true
+  end)
+
+  def is_trail_concat(_), do: false
+
+  Enum.each(@appendable_first_char, fn char ->
+    def is_lead_concat(<<unquote(char), _::binary>>), do: true
+  end)
+
+  def is_lead_concat(_), do: false
 
   def split_chains(initial, prefix), do: split_chains(initial, [], prefix)
 
   def split_chains([], acc, prefix) do
-    Enum.map(acc, fn
-      chain when is_list(chain) ->
-        final = :lists.flatten(chain)
+    try do
+      Enum.map(acc, fn
+        chain when is_list(chain) ->
+          final = :lists.flatten(chain)
 
-        if(prefix, do: prefix ++ final, else: final)
-        |> ampersand_join()
+          if(prefix, do: prefix ++ final, else: final)
+          |> ampersand_join()
 
-      chain ->
-        if(prefix, do: [prefix ++ [chain]], else: [chain])
-    end)
+        chain ->
+          if(prefix, do: [prefix ++ [chain]], else: [chain])
+      end)
+    catch
+      {:error, _} = error -> error
+    end
   end
 
   def split_chains([head | t], [], prefix) do

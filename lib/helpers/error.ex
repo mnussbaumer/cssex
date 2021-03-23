@@ -25,4 +25,10 @@ defmodule CSSEx.Helpers.Error do
   def error_msg({:malformed, :function_call}), do: "malformed function call"
 
   def error_msg({:invalid_argument, name}), do: "invalid argument #{name}"
+
+  def error_msg({:invalid_component_concat, to_concat, existing}),
+    do: "you're tring to concat an html element #{to_concat} to another html element #{existing}"
+
+  def error_msg({:invalid_parent_concat, to_concat}),
+    do: "you're tring to concat #{to_concat} outside of a block"
 end
