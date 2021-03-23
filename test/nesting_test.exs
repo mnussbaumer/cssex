@@ -57,63 +57,56 @@ defmodule CSSEx.Nesting.Test do
   end
 
   test "html tags nestings when parent is also an html tag" do
-
     assert {
-      :ok,
-      _,
-      "div p.test.test-inner{color:red;}\n"
-    } = Parser.parse(
-      """
-      div {
-        .test {
-      	   &.test-inner {
-             &p { color: red; }
-           }
-        }
-      }
-      """
-    )
+             :ok,
+             _,
+             "div p.test.test-inner{color:red;}\n"
+           } =
+             Parser.parse("""
+             div {
+               .test {
+             	   &.test-inner {
+                    &p { color: red; }
+                  }
+               }
+             }
+             """)
   end
 
   test "nesting upwards of parent" do
-
     assert {
-      :ok,
-      _,
-      "div p.test-parent .test{color:red;}\n"
-    } = Parser.parse(
-      """
-      div {
-        .test {
-      	   .test-parent & {
-             &p { color: red; }
-           }
-        }
-      }
-      """
-    )
+             :ok,
+             _,
+             "div p.test-parent .test{color:red;}\n"
+           } =
+             Parser.parse("""
+             div {
+               .test {
+             	   .test-parent & {
+                    &p { color: red; }
+                  }
+               }
+             }
+             """)
   end
 
-  
   test "pseudos targeting parents" do
-
     assert {
-      :ok,
-      _,
-      "div :not(.test.test-parent){color:red;}div .test :is(.other){color:blue;}\n"
-    } = Parser.parse(
-      """
-      div {
-        .test {
-      	   &.test-parent {
-             :not(&) { color: red; }
-           }
-           .other {
-      	     :is(&) { color: blue; }
-           }
-        }
-      }
-      """
-    )
+             :ok,
+             _,
+             "div :not(.test.test-parent){color:red;}div .test :is(.other){color:blue;}\n"
+           } =
+             Parser.parse("""
+             div {
+               .test {
+             	   &.test-parent {
+                    :not(&) { color: red; }
+                  }
+                  .other {
+             	     :is(&) { color: blue; }
+                  }
+               }
+             }
+             """)
   end
 end
