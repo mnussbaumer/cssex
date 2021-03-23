@@ -73,4 +73,42 @@ defmodule CSSEx.Error.Test do
 
     assert error =~ "unexpected token: ;  \" :: l:10 c:0"
   end
+
+  test "it should error when nesting an html tag to another html tag" do
+    assert {:error, %{error: error}} = Parser.parse(
+      """
+      div {
+        &.test {
+          &p { color: red; }
+        }
+      }
+      """
+    )
+
+    assert error =~ "you're tring to concat an html element p to another html element div.test\" :: l:3 c:5"
+  end
+
+  test "it should error when & is used without being nested" do
+    assert {:error, %{error: error}} = Parser.parse(
+      """
+      &.test {
+        p { color: red; }
+      }
+      """
+    )
+
+    assert error =~ "\"you're tring to concat .test outside of a block\" :: l:2 c:3"
+  end
+
+  test "it should error when a postfix & is used without being nested" do
+    assert {:error, %{error: error}} = Parser.parse(
+      """
+      .test& {
+        &p { color: red; }
+      }
+      """
+    )
+
+    assert error =~ "\"you're tring to concat p.test outside of a block\" :: l:2 c:3"
+  end
 end

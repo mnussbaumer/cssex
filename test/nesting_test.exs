@@ -45,7 +45,6 @@ defmodule CSSEx.Nesting.Test do
     assert parsed =~ ".div_1.div_2_a.div_2_a_a .inner-inner{display:block;}"
     assert parsed =~ ".div_1.div_3_b{margin:10px;}"
 
-    # this needs to be better 
     assert parsed =~ ".box-1, .box-2, .box-3{color:magenta;}"
     assert parsed =~ ".box-1.box-4{height:50px;}"
     assert parsed =~ ".box-1 .box-5{height:50px;}"
@@ -55,5 +54,66 @@ defmodule CSSEx.Nesting.Test do
 
     assert parsed =~ ".box-3.box-4{height:50px;}"
     assert parsed =~ ".box-3 .box-5{height:50px;}"
+  end
+
+  test "html tags nestings when parent is also an html tag" do
+
+    assert {
+      :ok,
+      _,
+      "div p.test.test-inner{color:red;}\n"
+    } = Parser.parse(
+      """
+      div {
+        .test {
+      	   &.test-inner {
+             &p { color: red; }
+           }
+        }
+      }
+      """
+    )
+  end
+
+  test "nesting upwards of parent" do
+
+    assert {
+      :ok,
+      _,
+      "div p.test-parent .test{color:red;}\n"
+    } = Parser.parse(
+      """
+      div {
+        .test {
+      	   .test-parent & {
+             &p { color: red; }
+           }
+        }
+      }
+      """
+    )
+  end
+
+  
+  test "pseudos targeting parents" do
+
+    assert {
+      :ok,
+      _,
+      "div :not(.test.test-parent){color:red;}div .test :is(.other){color:blue;}\n"
+    } = Parser.parse(
+      """
+      div {
+        .test {
+      	   &.test-parent {
+             :not(&) { color: red; }
+           }
+           .other {
+      	     :is(&) { color: blue; }
+           }
+        }
+      }
+      """
+    )
   end
 end

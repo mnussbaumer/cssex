@@ -1209,7 +1209,7 @@ defmodule CSSEx.Parser do
 
   # add the current_selector to the current_chain
   def add_current_selector(%{current_key: cs} = data) do
-    current_selector = String.trim_trailing(IO.iodata_to_binary(cs))
+    current_selector = String.trim(IO.iodata_to_binary(cs))
 
     case maybe_replace_val(current_selector, data) do
       {:ok, replaced_selector} ->
