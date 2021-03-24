@@ -33,12 +33,15 @@ defmodule CSSEx do
         :entry_points ->
           new_entries =
             Enum.map(v, fn {orig, final} ->
-	      case dir do
-		nil -> {orig, final}
-		_ -> 
-		  {Path.join([dir, orig]), Path.join([dir, final])}
-	      end
+              case dir do
+                nil ->
+                  {orig, final}
+
+                _ ->
+                  {Path.join([dir, orig]), Path.join([dir, final])}
+              end
             end)
+
           struct(acc, [{k, new_entries}])
 
         _ ->
