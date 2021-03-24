@@ -25,7 +25,7 @@ defmodule Mix.Tasks.Cssex.Parser do
   def run([]),
     do:
       error(
-        "either specify the file paths with --e cssex/file.cssex=output/file.css, and/or the  or a module from where to load a CSSEx config, with --c myapp_web",
+        "either specify the file paths with --e cssex/file.cssex=output/file.css, and/or the --a application flag or a module from where to load a CSSEx config, with --c myapp_web",
         64
       )
 
