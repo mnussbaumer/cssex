@@ -1,0 +1,7 @@
+@!color blue;
+
+div {
+    &.test {
+      color:<$color$>;
+    }
+}

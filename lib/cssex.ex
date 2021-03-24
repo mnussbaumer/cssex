@@ -33,7 +33,13 @@ defmodule CSSEx do
         :entry_points ->
           new_entries =
             Enum.map(v, fn {orig, final} ->
-              {Path.join([dir, orig]), Path.join([dir, final])}
+              case dir do
+                nil ->
+                  {orig, final}
+
+                _ ->
+                  {Path.join([dir, orig]), Path.join([dir, final])}
+              end
             end)
 
           struct(acc, [{k, new_entries}])
@@ -306,8 +312,8 @@ defmodule CSSEx do
   end
 
   # TODO check use cases with expand, perhaps it's not warranted?
-  defp assemble_path(<<"/", _::binary>> = path, _cwd), do: Path.expand(path)
+  def assemble_path(<<"/", _::binary>> = path, _cwd), do: Path.expand(path)
 
-  defp assemble_path(path, cwd),
+  def assemble_path(path, cwd),
     do: Path.join([cwd, path]) |> Path.expand()
 end
