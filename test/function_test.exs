@@ -67,4 +67,14 @@ defmodule CSSEx.Function.Test do
              div { color: <$test$>;}
              """)
   end
+
+  test "function errors result in parsing errors" do
+    assert {:error, %Parser{error: error}} =
+             Parser.parse("""
+             @!test @fn::opacity(red);
+             div { color: <$test$>;}
+             """)
+
+    assert error =~ "function call opacity threw an exception"
+  end
 end

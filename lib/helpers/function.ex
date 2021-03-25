@@ -107,11 +107,16 @@ defmodule CSSEx.Helpers.Function do
             finish_error(data, {:not_declared, :function, name})
 
           function when is_function(function) ->
-            case apply(function, final_args) do
-              {:ok, result} when is_binary(result) -> finish_call(data, rem, result)
-              {:ok, [_ | _] = result} -> finish_call(data, rem, IO.iodata_to_binary(result))
-              {:ok, result} -> finish_call(data, rem, to_string(result))
-              error -> finish_error(data, error)
+            try do
+              case apply(function, final_args) do
+                {:ok, result} when is_binary(result) -> finish_call(data, rem, result)
+                {:ok, [_ | _] = result} -> finish_call(data, rem, IO.iodata_to_binary(result))
+                {:ok, result} -> finish_call(data, rem, to_string(result))
+                error -> finish_error(data, error)
+              end
+            rescue
+              e ->
+                finish_error(data, {:function_call, name, e})
             end
         end
     end

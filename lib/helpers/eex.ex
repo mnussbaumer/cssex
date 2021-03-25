@@ -1,6 +1,7 @@
 defmodule CSSEx.Helpers.EEX do
-  import CSSEx.Parser, only: [open_current: 2, close_current: 1]
+  import CSSEx.Parser, only: [open_current: 2, close_current: 1, add_error: 2]
   import CSSEx.Helpers.Shared, only: [inc_col: 1, inc_col: 2, inc_line: 1, inc_line: 2]
+  import CSSEx.Helpers.Error, only: [error_msg: 1]
   @line_terminators CSSEx.Helpers.LineTerminators.code_points()
   @white_space CSSEx.Helpers.WhiteSpace.code_points()
 
@@ -35,16 +36,7 @@ defmodule CSSEx.Helpers.EEX do
 
     {:ok, {final <> rem, %{close_current(data) | line: line + line_correction}}}
   rescue
-    error ->
-      description =
-        case error do
-          %{description: description} -> description
-          error when is_binary(error) -> error
-          _ -> "#{inspect(error)}"
-        end
-
-      {:error,
-       %{data | valid?: false, error: "Error parsing EEX tag: #{description} :: line: #{line}"}}
+    error -> {:error, add_error(data, error_msg({:eex, error}))}
   end
 
   def do_parse(<<>>, data, %{column: col, line: line}) do
@@ -136,10 +128,4 @@ defmodule CSSEx.Helpers.EEX do
 
   def inc_level(%{level: level} = state, amount \\ 1),
     do: %{state | level: level + amount}
-
-  def add_error(data, {:not_declared, :var, val}),
-    do: %{data | valid?: false, error: "variable #{val} was not declared"}
-
-  def add_error(data, {:not_declared, :assign, val}),
-    do: %{data | valid?: false, error: "assign #{val} was not declared"}
 end
