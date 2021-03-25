@@ -25,7 +25,12 @@ defmodule CSSEx.Helpers.Shared do
   # we have more than one
   def remove_last_from_chain(%{current_chain: [_ | _] = chain, prefix: prefix} = data) do
     [_ | new_chain] = :lists.reverse(chain)
-    new_chain = :lists.reverse(new_chain)
+
+    new_chain =
+      case prefix do
+        nil -> :lists.reverse(new_chain)
+        _ -> prefix ++ :lists.reverse(new_chain)
+      end
 
     case split_chains(new_chain) do
       [_ | _] = splitted ->
@@ -46,7 +51,6 @@ defmodule CSSEx.Helpers.Shared do
         _ -> split_chains(prefix ++ new_chain)
       end
 
-    # IO.inspect({new_chain, new_split, prefix}, label: "new_chain")
     case new_split do
       [_ | _] ->
         %{data | current_chain: new_chain, split_chain: new_split}

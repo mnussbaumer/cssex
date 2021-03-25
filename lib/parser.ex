@@ -11,6 +11,15 @@ defmodule CSSEx.Parser do
 
   @timeout 15_000
 
+  @functions Enum.reduce(CSSEx.Helpers.Functions.__info__(:functions), %{}, fn {fun, arity},
+                                                                               acc ->
+               Map.put(
+                 acc,
+                 Atom.to_string(fun),
+                 Function.capture(CSSEx.Helpers.Functions, fun, arity)
+               )
+             end)
+
   @enforce_keys [:ets, :ets_fontface, :ets_keyframes, :line, :column]
   defstruct [
     :ets,
@@ -39,7 +48,7 @@ defmodule CSSEx.Parser do
     current_scope: nil,
     current_add_var: false,
     current_function: "",
-    functions: %{},
+    functions: @functions,
     level: 0,
     charset: nil,
     first_rule: true,

@@ -65,6 +65,7 @@ defmodule CSSEx.Helpers.Function do
   def parse_call(data, rem) do
     case do_parse_call(data, rem, [], 0) do
       {:ok, _} = ok -> ok
+      {:error, _} = error -> error
     end
   end
 
