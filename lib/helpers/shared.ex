@@ -27,7 +27,7 @@ defmodule CSSEx.Helpers.Shared do
     [_ | new_chain] = :lists.reverse(chain)
     new_chain = :lists.reverse(new_chain)
 
-    case split_chains(new_chain, prefix) do
+    case split_chains(new_chain) do
       [_ | _] = splitted ->
         %{data | current_chain: new_chain, split_chain: splitted}
 
@@ -42,10 +42,11 @@ defmodule CSSEx.Helpers.Shared do
     new_split =
       case new_chain do
         [_] when is_nil(prefix) -> [new_chain]
-        [_] -> [prefix ++ new_chain]
-        _ -> split_chains(new_chain, prefix)
+        _ when is_nil(prefix) -> split_chains(new_chain)
+        _ -> split_chains(prefix ++ new_chain)
       end
 
+    # IO.inspect({new_chain, new_split, prefix}, label: "new_chain")
     case new_split do
       [_ | _] ->
         %{data | current_chain: new_chain, split_chain: new_split}
@@ -121,35 +122,34 @@ defmodule CSSEx.Helpers.Shared do
 
   def is_lead_concat(_), do: false
 
-  def split_chains(initial, prefix), do: split_chains(initial, [], prefix)
+  def split_chains(initial), do: split_chains(initial, [])
 
-  def split_chains([], acc, prefix) do
+  def split_chains([], acc) do
     try do
       Enum.map(acc, fn
         chain when is_list(chain) ->
-          final = :lists.flatten(chain)
-
-          if(prefix, do: prefix ++ final, else: final)
+          chain
+          |> :lists.flatten()
           |> ampersand_join()
 
         chain ->
-          if(prefix, do: [prefix ++ [chain]], else: [chain])
+          [chain]
       end)
     catch
       {:error, _} = error -> error
     end
   end
 
-  def split_chains([head | t], [], prefix) do
+  def split_chains([head | t], []) do
     splits =
       head
       |> String.split(",")
       |> Enum.map(fn el -> String.trim(el) end)
 
-    split_chains(t, splits, prefix)
+    split_chains(t, splits)
   end
 
-  def split_chains([head | t], acc, prefix) do
+  def split_chains([head | t], acc) do
     splits =
       head
       |> String.split(",")
@@ -162,6 +162,6 @@ defmodule CSSEx.Helpers.Shared do
         end)
       end)
 
-    split_chains(t, new_acc, prefix)
+    split_chains(t, new_acc)
   end
 end

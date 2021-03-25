@@ -45,6 +45,8 @@ defmodule CSSEx.Parser do
     first_rule: true,
     warnings: [],
     media: %{},
+    media_parent: "",
+    source_pid: nil,
     prefix: nil,
     font_face: false,
     font_face_count: 0,
@@ -127,7 +129,8 @@ defmodule CSSEx.Parser do
        line: 1,
        column: 1,
        ets_fontface: table_font_face_ref,
-       ets_keyframes: table_keyframes_ref
+       ets_keyframes: table_keyframes_ref,
+       source_pid: self()
      }, [@timeout]}
   end
 
@@ -821,7 +824,10 @@ defmodule CSSEx.Parser do
         {:parse, :value, :media},
         data
       ) do
-    inner_data = create_data_for_inner(data, false, nil)
+    inner_data =
+      data
+      |> create_data_for_inner(false, nil)
+      |> add_media_parent(data)
 
     case __MODULE__.parse(inner_data, rem) do
       {:finished, {%{column: n_col, line: n_line} = new_inner_data, new_rem}} ->
@@ -977,9 +983,6 @@ defmodule CSSEx.Parser do
         {:parse, :current_key},
         %{current_key: current_key} = data
       ) do
-    # IO.inspect(data)
-    # IO.inspect(fold_attributes_table(data.ets))
-
     current_key
     |> IO.iodata_to_binary()
     |> String.split(":", parts: 2)
@@ -1432,15 +1435,22 @@ defmodule CSSEx.Parser do
   level to the correct selectors
   """
   def add_media_query(
-        %{current_value: current_value, media: media} = data,
-        %{ets: inner_ets}
+        %{current_value: current_value, media_parent: media_p} = data,
+        %{ets: inner_ets, media: media}
       ) do
-    parsed = IO.iodata_to_binary(current_value)
+    parsed =
+      current_value
+      |> IO.iodata_to_binary()
+      |> String.trim()
+
     {parsed_2, data} = CSSEx.Helpers.Media.parse(parsed, data)
 
     case maybe_replace_val(parsed_2, data) do
       {:ok, cval} ->
-        media_query = IO.iodata_to_binary(["@media" | cval]) |> String.trim_trailing()
+        media_query =
+          ["@media", media_p, cval]
+          |> Enum.filter(fn element -> String.length(element) > 0 end)
+          |> Enum.join(" ")
 
         new_media =
           case Map.get(media, media_query) do
@@ -1512,12 +1522,16 @@ defmodule CSSEx.Parser do
           local_assigns: l_assigns,
           scope: scope,
           local_scope: l_scope,
-          functions: functions
+          functions: functions,
+          media: media,
+          media_parent: media_parent,
+          source_pid: source_pid
         } = data,
         ets \\ nil,
         prefix \\ nil
       ) do
-    inner_ets = if(ets, do: ets, else: :ets.new(:inner, [:public]))
+    inner_ets =
+      if(ets, do: ets, else: :ets.new(:inner, [:public, {:heir, source_pid, "IINNER_ETS"}]))
 
     inner_prefix =
       if(prefix,
@@ -1542,8 +1556,27 @@ defmodule CSSEx.Parser do
       local_assigns: inner_assigns,
       local_scope: inner_scope,
       functions: functions,
-      split_chain: inner_split_chain
+      split_chain: inner_split_chain,
+      media: media,
+      source_pid: source_pid,
+      media_parent: media_parent
     }
+  end
+
+  def add_media_parent(
+        data,
+        %{current_value: current_value, media_parent: media_parent} = _parent_data
+      ) do
+    parsed = IO.iodata_to_binary(current_value)
+    {parsed_2, data} = CSSEx.Helpers.Media.parse(parsed, data)
+
+    new_media_parent =
+      [media_parent, parsed_2]
+      |> Enum.map(fn element -> String.trim(element) end)
+      |> Enum.join(" ")
+      |> String.trim()
+
+    %{data | media_parent: new_media_parent}
   end
 
   def merge_inner_data(
@@ -1551,11 +1584,12 @@ defmodule CSSEx.Parser do
           warnings: existing_warnings,
           scope: existing_scope,
           assigns: existing_assigns,
-          functions: existing_functions
+          functions: existing_functions,
+          media: media
         } = data,
         %{
           warnings: warnings,
-          media: media,
+          # media: media,
           scope: scope,
           assigns: assigns,
           valid?: valid?,
