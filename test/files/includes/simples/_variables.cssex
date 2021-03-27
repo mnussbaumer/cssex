@@ -1,0 +1,41 @@
+%!screen_breakpoints [
+  sm: "0px",
+  md: "768px",
+  lg: "992px",
+  xl: "1200px",
+  xxl: "1440px",
+];
+
+%!sizes %{
+  sm: 12,
+  md: 18,
+  lg: 24,
+  xl: 36,
+  xxl: 40
+};
+
+%!sizes_props %{
+  "font-size" => fn(x) -> x end,
+  "line-height" => fn(x) -> x end,
+  "btn-height" => fn(x) -> Float.round(x * 1.6, 1) end
+};
+
+%!sizes_map for {k, v} <- sizes, reduce: %{} do
+  acc ->
+    Map.put(acc, k, Enum.reduce(sizes_props, %{}, fn({k, fun}, acc_inner) -> Map.put(acc_inner, k, fun.(v)) end))
+end;
+
+%!sides %{left: "l", top: "t", right: "r", bottom: "b"};
+
+%!color_map %{
+  white: "white",
+  black: "black",
+  text: "#152734",
+  primary: "#ee483e",
+  secondary: "#2d4049",
+  tertiary: "rgb(255, 235, 155)",
+  warning: "#E07000",
+  error: "#ff2100",
+  info: "#00A6E0",
+  success: "#4ad887"
+};

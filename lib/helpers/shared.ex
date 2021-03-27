@@ -16,7 +16,7 @@ defmodule CSSEx.Helpers.Shared do
   # we only have one element but we do have a prefix, set the split chain to the prefix and reset the current_chain
   def remove_last_from_chain(%{current_chain: [_], prefix: prefix} = data)
       when not is_nil(prefix),
-      do: %{data | current_chain: [], split_chain: [prefix]}
+      do: %{data | current_chain: [], split_chain: Enum.join(prefix, ",")}
 
   # we only have one element so reset both chains
   def remove_last_from_chain(%{current_chain: [_]} = data),
@@ -34,7 +34,7 @@ defmodule CSSEx.Helpers.Shared do
 
     case split_chains(new_chain) do
       [_ | _] = splitted ->
-        %{data | current_chain: new_chain, split_chain: splitted}
+        %{data | current_chain: new_chain, split_chain: merge_split(splitted)}
 
       {:error, error} ->
         CSSEx.Parser.add_error(data, Error.error_msg(error))
@@ -53,11 +53,17 @@ defmodule CSSEx.Helpers.Shared do
 
     case new_split do
       [_ | _] ->
-        %{data | current_chain: new_chain, split_chain: new_split}
+        %{data | current_chain: new_chain, split_chain: merge_split(new_split)}
 
       {:error, error} ->
         CSSEx.Parser.add_error(data, Error.error_msg(error))
     end
+  end
+
+  def merge_split(split_chain) do
+    split_chain
+    |> Enum.map(fn chain -> Enum.join(chain, " ") end)
+    |> Enum.join(",")
   end
 
   def ampersand_join(initial), do: ampersand_join(initial, [])

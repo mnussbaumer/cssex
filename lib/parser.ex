@@ -250,7 +250,7 @@ defmodule CSSEx.Parser do
   def handle_event(
         :internal,
         {:parse, <<"@fn::", rem::binary>>},
-        _state,
+        state,
         data
       ) do
     new_data =
@@ -815,6 +815,7 @@ defmodule CSSEx.Parser do
     new_data =
       data
       |> add_current_selector()
+      |> close_current()
       |> open_current(:selector)
       |> reset_current()
       |> inc_col()
@@ -890,11 +891,11 @@ defmodule CSSEx.Parser do
   # parsed content and create an anonymous fun
   def handle_event(
         :internal,
-        {:parse, <<123, rem::binary>>},
+        {:parse, <<"->", rem::binary>>},
         {:parse, :value, :current_function},
         data
       ) do
-    case CSSEx.Helpers.Function.parse(inc_col(data), rem) do
+    case CSSEx.Helpers.Function.parse(inc_col(data, 2), rem) do
       {:ok, {new_data, new_rem}} ->
         new_data_2 =
           new_data
@@ -919,7 +920,7 @@ defmodule CSSEx.Parser do
     new_data =
       data
       |> Map.put(:current_key, [char])
-      |> open_current(:rule)
+      |> open_current(:rule, rem)
       |> inc_col()
       |> first_rule()
 
@@ -1193,21 +1194,19 @@ defmodule CSSEx.Parser do
 
   # add attribute to the ETS table
   def add_to_attributes(
-        %{ets: ets, split_chain: split_chain} = data,
+        %{ets: ets, split_chain: chain} = data,
         key,
         val
       ) do
     case maybe_replace_val(val, data) do
       {:ok, new_val} ->
-        Enum.each(split_chain, fn cc ->
-          case :ets.lookup(ets, cc) do
-            [{_, existing}] ->
-              :ets.insert(ets, {cc, [existing, key, ":", new_val, ";"]})
+        case :ets.lookup(ets, chain) do
+          [{_, existing}] ->
+            :ets.insert(ets, {chain, [existing, key, ":", new_val, ";"]})
 
-            [] ->
-              :ets.insert(ets, {cc, [key, ":", new_val, ";"]})
-          end
-        end)
+          [] ->
+            :ets.insert(ets, {chain, [key, ":", new_val, ";"]})
+        end
 
         data
 
@@ -1245,6 +1244,7 @@ defmodule CSSEx.Parser do
         current_function: ""
     }
 
+  # TODO when tightening the scopes this has to take into account creating a variable in a given selector, right now it will crash when variables that create css vars (@*) are declared inside elements
   def maybe_add_css_var(%{current_add_var: false} = data, _, _), do: data
 
   def maybe_add_css_var(
@@ -1422,7 +1422,8 @@ defmodule CSSEx.Parser do
   def fold_attributes_table(ets) do
     :ets.foldl(
       fn {selector, attributes}, acc ->
-        [acc, Enum.join(selector, " "), "{", attributes, "}"]
+        # [acc, Enum.join(selector, " "), "{", attributes, "}"]
+        [acc, selector, "{", attributes, "}"]
       end,
       [],
       ets
@@ -1503,7 +1504,7 @@ defmodule CSSEx.Parser do
 
     case maybe_replace_val(parsed, data) do
       {:ok, cval} ->
-        full_path = ["@keyframes", String.trim(cval)]
+        full_path = ["@keyframes ", String.trim(cval)]
         folded_css = fold_attributes_table(inner_ets)
 
         case :ets.lookup(original_ets, full_path) do
@@ -1540,7 +1541,7 @@ defmodule CSSEx.Parser do
         prefix \\ nil
       ) do
     inner_ets =
-      if(ets, do: ets, else: :ets.new(:inner, [:public, {:heir, source_pid, "IINNER_ETS"}]))
+      if(ets, do: ets, else: :ets.new(:inner, [:public, {:heir, source_pid, "INNER_ETS"}]))
 
     inner_prefix =
       if(prefix,
@@ -1644,8 +1645,9 @@ defmodule CSSEx.Parser do
     %{data | valid?: false, error: "#{inspect(error)} :: l:#{line} c:#{column}"}
   end
 
-  def open_current(%{current_reg: creg, line: l, column: c} = data, element),
-    do: %{data | current_reg: [{l, c, element} | creg]}
+  def open_current(%{current_reg: creg, line: l, column: c} = data, element, rule \\ nil) do
+    %{data | current_reg: [{l, c, element} | creg]}
+  end
 
   def close_current(%{current_reg: [_ | t]} = data), do: %{data | current_reg: t}
   def close_current(%{current_reg: [], level: level} = data) when level > 0, do: data

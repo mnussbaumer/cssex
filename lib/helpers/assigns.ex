@@ -3,8 +3,10 @@ defmodule CSSEx.Helpers.Assigns do
   Helpers for parsing a CSSEx assign, given it can be any elixir term/expression to be evaluated it has different rules and should keep all characters until the termination mark, afterwards it should be validated and return either an updated {rem, %CSSEx.Parser{valid?: true}} or {rem, %CSSEx.Parser{valid?: false}} with the error field populated.
   """
 
-  import CSSEx.Parser, only: [close_current: 1, add_error: 1]
+  import CSSEx.Parser, only: [close_current: 1, add_error: 1, add_error: 2]
   import CSSEx.Helpers.Shared, only: [inc_col: 1, inc_line: 1]
+  import CSSEx.Helpers.Error, only: [error_msg: 1]
+  import CSSEx.Helpers.EEX, only: [build_bindings: 1]
   @line_terminators CSSEx.Helpers.LineTerminators.code_points()
 
   # termination when parsing the assign
@@ -15,7 +17,8 @@ defmodule CSSEx.Helpers.Assigns do
         ) do
       ckey = IO.iodata_to_binary(current_key)
       cval = String.trim_trailing(IO.iodata_to_binary(current_value))
-      {final_val, _} = Code.eval_string(cval, [], line: line)
+
+      {final_val, _} = Code.eval_string(cval, build_bindings(data), line: line)
 
       new_data =
         data
@@ -26,14 +29,7 @@ defmodule CSSEx.Helpers.Assigns do
       {rem, new_data}
     rescue
       error ->
-        description =
-          case error do
-            %{description: description} -> description
-            error when is_binary(error) -> error
-            _ -> "Error: #{inspect(error)}"
-          end
-
-        {rem, %{data | valid?: false, error: "#{description} :: section line end: #{line}"}}
+        {rem, add_error(data, error_msg({:assigns, error}))}
     end
 
     def parse(<<unquote(char), rem::binary>>, %{current_value: cval} = data),

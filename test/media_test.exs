@@ -23,7 +23,7 @@ defmodule CSSEx.Media.Test do
              """)
 
     assert parsed =~
-             "@media screen and (max-width:600px){.test{font-family:Arial;background-color:black;}.test div.example{display:none;}}\n"
+             "@media screen and (max-width:600px){.test div.example{display:none;}.test{font-family:Arial;background-color:black;}}\n"
 
     assert parsed =~ ".test{color:red;}"
   end
@@ -43,7 +43,7 @@ defmodule CSSEx.Media.Test do
 
   test "nested media components compose" do
     assert {:ok, _,
-            "@media print and (max-width:565px){.test{color:red;}}@media print and (max-width:565px) and (min-width:300px){.test{color:orange;}.test.inner{color:blue;}}\n"} =
+            "@media print and (max-width:565px){.test{color:red;}}@media print and (max-width:565px) and (min-width:300px){.test.inner{color:blue;}.test{color:orange;}}\n"} =
              Parser.parse("""
              @!color orange;
              @!min_width 300px;

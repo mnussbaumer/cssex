@@ -1,0 +1,85 @@
+@include ./_variables.cssex;
+
+@fn enforce_wh(width, height) ->
+  """
+  @fn::enforce_size(width, #{width})
+  @fn::enforce_size(height, #{height})
+  """
+end;
+
+@fn enforce_size(what, size) ->
+  "#{what}: #{size};" <>
+  "min-#{what}: #{size};" <>
+  "max-#{what}: #{size};"
+end;
+
+@fn enforce_square(size) ->
+  """
+  @fn::enforce_size(width, #{size})
+  @fn::enforce_size(height, #{size})
+  """
+end;
+
+@fn enforce_circle(size) ->
+  """
+  @fn::enforce_square(#{size})
+  border-radius: 50%;
+  """
+end;
+
+@fn next_breakpoint(bp, breakpoints) ->
+  keys = Keyword.keys(breakpoints)
+
+  Enum.find_index(keys, String.to_atom(bp))
+  |> case do
+       nil -> "null";
+       index -> (Enum.at(keys, index + 1) || "null")
+     end
+end;
+
+@fn breakpoint_min_max(min_bp, max_bp, breakpoints) ->
+  min_bp = String.to_existing_atom(min_bp)
+  max_bp = String.to_existing_atom(max_bp)
+  keys = Keyword.keys(breakpoints)
+  min_index = Enum.find_index(keys, fn(x) -> x == min_bp end)
+  min = Keyword.get(breakpoints, min_bp)
+
+  max = case max_bp && max_bp != min_bp do
+	  true -> Keyword.get(breakpoints, max_bp)
+	  false -> Keyword.get(breakpoints, Enum.at(keys, min_index + 1))
+	end
+
+  %CSSEx.Unit{value: val} = CSSEx.Unit.new_unit(min)
+  min_text = if(val > 0, do: " and (min-width: #{min})", else: "")
+
+  "@media screen#{min_text} and (max-width: #{max}) { #{ctx_content} }"  
+end;
+
+@fn breakpoint_max(bp, breakpoints) ->
+  bp = String.to_existing_atom(bp)
+  max = Keyword.get(breakpoints, bp)
+
+  "@media screen and (max-width: #{max}) { #{ctx_content} }"
+end;
+
+@fn breakpoint_min(bp, breakpoints) ->
+  bp = String.to_existing_atom(bp)
+  min = Keyword.get(breakpoints, bp)
+
+  "@media screen and (min-width: #{min}) { #{ctx_content} }"
+end;
+
+@fn reset_border() ->
+  """
+  #{ctx_content}
+  outline: 0;
+  border: 0;
+  box-shadow: 0;
+  
+  &:hover, &:active, &:focus, &:disabled, &:enabled, &:invalid, &:required {
+    outline: 0;
+    border: 0;
+    box-shadow: 0;
+  }
+  """
+end;

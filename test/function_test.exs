@@ -3,7 +3,7 @@ defmodule CSSEx.Function.Test do
   alias CSSEx.Parser
 
   @basic """
-  @fn lighten_test(color, percentage) {
+  @fn lighten_test(color, percentage) ->
     {:ok, %CSSEx.HSLA{l: %CSSEx.Unit{value: l} = l_unit} = hsla} = 
                                                        CSSEx.HSLA.new_hsla(color)
 
@@ -17,7 +17,7 @@ defmodule CSSEx.Function.Test do
       end
 
     {:ok, %CSSEx.HSLA{hsla | l: %CSSEx.Unit{l_unit | value: new_l}} |> to_string}
-  };
+  end;
 
   @!red red;
   .test{color: @fn::lighten_test(<$red$>, 10)}

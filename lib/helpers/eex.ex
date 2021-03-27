@@ -16,22 +16,9 @@ defmodule CSSEx.Helpers.EEX do
     end
   end
 
-  def finish(
-        rem,
-        %{assigns: assigns, local_assigns: local_assigns, line: line} = data,
-        %{acc: eex_block} = state
-      ) do
+  def finish(rem, %{line: line} = data, %{acc: eex_block} = state) do
     acc = IO.iodata_to_binary(eex_block)
-
-    bindings =
-      Enum.map(Map.merge(assigns, local_assigns), fn {k, v} -> {String.to_atom(k), v} end)
-
-    final =
-      case EEx.eval_string(acc, assigns: bindings) do
-        replaced when is_binary(replaced) -> replaced
-        iodata when is_list(iodata) -> IO.iodata_to_binary(iodata)
-      end
-
+    final = eval_with_bindings(acc, data)
     line_correction = calc_line_offset(state, final)
 
     {:ok, {final <> rem, %{close_current(data) | line: line + line_correction}}}
@@ -128,4 +115,14 @@ defmodule CSSEx.Helpers.EEX do
 
   def inc_level(%{level: level} = state, amount \\ 1),
     do: %{state | level: level + amount}
+
+  def eval_with_bindings(acc, data),
+    do: EEx.eval_string(acc, assigns: build_bindings(data))
+
+  def build_bindings(%{assigns: a, local_assigns: la}),
+    do:
+      Enum.map(
+        Map.merge(a, la),
+        fn {k, v} -> {String.to_atom(k), v} end
+      )
 end
