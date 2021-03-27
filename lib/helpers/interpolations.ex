@@ -1,7 +1,7 @@
 defmodule CSSEx.Helpers.Interpolations do
   # replaces the value if it mentions a cssex variable and that variable is bound
   # in either the local_scope (first match) or the global scope (second match)
-  import CSSEx.Helpers.EEX, only: [eval_with_bindings: 2]
+  alias CSSEx.Helpers.EEX, as: HEEX
 
   @regex_val ~r/(?<interpolation><\$.+\$>)|(?<eex_l><%=.+?end\s?%>)|(?<eex_s><%=.+?%>)/u
   @regex_arg ~r/(?<interpolation><\$.+\$>)|<%=\s?(?<eex_l>.+?)\?end\s+?%>|<%=(?<eex_s>.+?)%>/u
@@ -34,10 +34,10 @@ defmodule CSSEx.Helpers.Interpolations do
               end
 
             ["", eex, ""] ->
-              {:cont, {:ok, String.replace(acc, eex, eval_with_bindings(eex, data))}}
+              {:cont, {:ok, String.replace(acc, eex, HEEX.eval_with_bindings(eex, data))}}
 
             ["", "", eex] ->
-              {:cont, {:ok, String.replace(acc, eex, eval_with_bindings(eex, data))}}
+              {:cont, {:ok, String.replace(acc, eex, HEEX.eval_with_bindings(eex, data))}}
 
             _ ->
               {:cont, {:ok, acc}}
@@ -81,10 +81,12 @@ defmodule CSSEx.Helpers.Interpolations do
               end
 
             ["", eex, ""] ->
-              {:cont, {:ok, String.replace(acc, eex, eval_with_bindings(String.trim(eex), data))}}
+              {:cont,
+               {:ok, String.replace(acc, eex, HEEX.eval_with_bindings(String.trim(eex), data))}}
 
             ["", "", eex] ->
-              {:cont, {:ok, String.replace(acc, eex, eval_with_bindings(String.trim(eex), data))}}
+              {:cont,
+               {:ok, String.replace(acc, eex, HEEX.eval_with_bindings(String.trim(eex), data))}}
 
             _ ->
               {:cont, {:ok, acc}}
