@@ -1,6 +1,11 @@
 defmodule CSSEx.Helpers.Interpolations do
   # replaces the value if it mentions a cssex variable and that variable is bound
   # in either the local_scope (first match) or the global scope (second match)
+  import CSSEx.Helpers.EEX, only: [eval_with_bindings: 2]
+
+  @regex_val ~r/(?<interpolation><\$.+\$>)|(?<eex_l><%=.+?end\s?%>)|(?<eex_s><%=.+?%>)/u
+  @regex_arg ~r/(?<interpolation><\$.+\$>)|<%=\s?(?<eex_l>.+?)\?end\s+?%>|<%=(?<eex_s>.+?)%>/u
+
   def maybe_replace_val(<<"@$$", var_name::binary>>, %{local_scope: ls})
       when is_map_key(ls, var_name),
       do: {:ok, Map.fetch!(ls, var_name)}
@@ -13,55 +18,80 @@ defmodule CSSEx.Helpers.Interpolations do
     do: {:error, {:not_declared, :var, var_name}}
 
   def maybe_replace_val(val, data) do
-    case Regex.scan(~r/<\$(.+?)\$>/u, val) do
+    case Regex.scan(@regex_val, val, capture: [:interpolation, :eex_l, :eex_s]) do
       [] ->
         {:ok, val}
 
       tokens ->
-        Enum.reduce_while(tokens, {:ok, val}, fn [token, var_name], {_result, acc} ->
-          case var_name do
-            <<"@$$", _::binary>> ->
-              case maybe_replace_val(var_name, data) do
-                {:ok, replaced} -> {:cont, {:ok, String.replace(acc, token, replaced)}}
+        Enum.reduce_while(tokens, {:ok, val}, fn captures, {_result, acc} ->
+          case captures do
+            [interpol, "", ""] ->
+              without_markers = String.replace(interpol, ~r/<\$\s*|\s*\$>/, "")
+
+              case maybe_replace_val("@$$" <> without_markers, data) do
+                {:ok, replaced} -> {:cont, {:ok, String.replace(acc, interpol, replaced)}}
                 error -> {:halt, error}
               end
+
+            ["", eex, ""] ->
+              {:cont, {:ok, String.replace(acc, eex, eval_with_bindings(eex, data))}}
+
+            ["", "", eex] ->
+              {:cont, {:ok, String.replace(acc, eex, eval_with_bindings(eex, data))}}
 
             _ ->
-              trimmed = String.trim(var_name)
-
-              case maybe_replace_val("@$$" <> trimmed, data) do
-                {:ok, replaced} -> {:cont, {:ok, String.replace(acc, token, replaced)}}
-                error -> {:halt, error}
-              end
+              {:cont, {:ok, acc}}
           end
         end)
     end
+  rescue
+    error -> {:error, {:eex, error}}
   end
+
+  def maybe_replace_arg(nil, data), do: {:ok, nil}
 
   def maybe_replace_arg(<<"@$$", _::binary>> = full, data),
     do: maybe_replace_val(full, data)
 
-  def maybe_replace_arg(<<"@", assign_name::binary>>, %{local_assigns: la})
-      when is_map_key(la, assign_name),
-      do: {:ok, Map.fetch!(la, assign_name)}
+  def maybe_replace_arg(<<"%::", name::binary>> = full, %{local_assigns: la})
+      when is_map_key(la, name),
+      do: {:ok, Map.fetch!(la, name)}
 
-  def maybe_replace_arg(<<"@", assign_name::binary>>, %{assigns: assigns})
-      when is_map_key(assigns, assign_name),
-      do: {:ok, Map.fetch!(assigns, assign_name)}
+  def maybe_replace_arg(<<"%::", name::binary>>, %{assigns: a})
+      when is_map_key(a, name),
+      do: {:ok, Map.fetch!(a, name)}
 
-  def maybe_replace_arg(<<"@", assign_name::binary>>, _data),
-    do: {:error, {:not_declared, :assign, assign_name}}
+  def maybe_replace_arg(<<"%::", name::binary>>, _data),
+    do: {:error, {:not_declared, :var, name}}
 
-  def maybe_replace_arg(<<"<$", _::binary>> = full, data) do
-    case Regex.run(~r/<\$(.+?)\$>/u, full) do
+  def maybe_replace_arg(val, data) do
+    case Regex.scan(@regex_arg, val, capture: [:interpolation, :eex_l, :eex_s]) do
       [] ->
-        {:error, {:invalid_argument, full}}
+        {:ok, val}
 
-      [_, token] ->
-        trimmed = String.trim(token)
-        maybe_replace_val("@$$" <> token, data)
+      tokens ->
+        Enum.reduce_while(tokens, {:ok, val}, fn captures, {_result, acc} ->
+          case captures do
+            [interpol, "", ""] ->
+              without_markers = String.replace(interpol, ~r/<\$\s*|\s*\$>/, "")
+
+              case maybe_replace_val("@$$" <> without_markers, data) do
+                {:ok, replaced} -> {:cont, {:ok, String.replace(acc, interpol, replaced)}}
+                error -> {:halt, error}
+              end
+
+            ["", eex, ""] ->
+              {:cont, {:ok, String.replace(acc, eex, eval_with_bindings(String.trim(eex), data))}}
+
+            ["", "", eex] ->
+              {:cont, {:ok, String.replace(acc, eex, eval_with_bindings(String.trim(eex), data))}}
+
+            _ ->
+              {:cont, {:ok, acc}}
+          end
+        end)
     end
+  rescue
+    error -> {:error, {:eex, error}}
   end
-
-  def maybe_replace_arg(val, _), do: {:ok, val}
 end

@@ -1,0 +1,25 @@
+@include ./_variables.cssex;
+@include ./_functions.cssex;
+
+<%= for {name, color} <- @color_map, reduce: "" do
+  acc ->
+    acc <> """
+    @*!#{name} #{color};
+    """
+end %>
+
+<%= for {k, v} <- @sizes_map, reduce: "" do
+  acc ->
+    acc <> """
+    .btn-#{k} {
+      font-size: #{v["font-size"]}px;
+      line-height: #{v["line-height"]}px;
+      height: #{v["btn-height"]}px;
+      min-height: #{v["btn-height"]}px;
+    }
+    """
+end %>
+
+.test {
+  @fn::reset_border()
+}

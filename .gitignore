@@ -22,6 +22,7 @@ erl_crash.dump
 # Ignore package tarball (built via "mix hex.build").
 cssex-*.tar
 
+*emacs-elixir-format*
 
 # Temporary files for e.g. tests
 /tmp

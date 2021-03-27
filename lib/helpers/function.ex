@@ -9,14 +9,20 @@ defmodule CSSEx.Helpers.Function do
     # we reached the end of the function declaration
     def parse(
           %{current_value: current_value, current_function: fn_iodata} = data,
-          <<"};", unquote(char), rem::binary>>
+          <<"end;", unquote(char), rem::binary>>
         ) do
       cval = String.trim(IO.iodata_to_binary(current_value))
       fun_string = String.trim(IO.iodata_to_binary(fn_iodata))
       {name, args} = extract_name_and_args(cval)
 
       full_string =
-        IO.iodata_to_binary(["fn(", Enum.join(args, ","), ") -> ", fun_string, " end"])
+        IO.iodata_to_binary([
+          "fn(",
+          Enum.join(["ctx_content" | args], ","),
+          ") -> ",
+          fun_string,
+          " end"
+        ])
 
       {fun_result, _} =
         Code.eval_string(full_string,
@@ -46,13 +52,37 @@ defmodule CSSEx.Helpers.Function do
     |> parse(rem)
   end
 
-  def extract_name_and_args(declaration) do
-    case Regex.run(~r/(.+)\((.+)?\)/, declaration) do
+  def extract_name_and_args(declaration, functions \\ nil) do
+    case Regex.run(~r/(.+)\((.+)?\)/s, declaration) do
       [_, name, args] ->
-        {name, Enum.map(String.split(args, ",", trim: true), fn arg -> String.trim(arg) end)}
+        case functions do
+          nil ->
+            split_args =
+              args
+              |> String.split(",", trim: true)
+              |> Enum.map(fn arg -> String.trim(arg) end)
+
+            {name, split_args}
+
+          funs ->
+            case Map.get(funs, name) do
+              nil ->
+                {:error, {:not_declared, :function, name}}
+
+              fun ->
+                {:arity, ar} = Function.info(fun, :arity)
+                split_args = String.split(args, ",", trim: true, parts: ar)
+                {actual_args, ctx} = Enum.split(split_args, ar - 1)
+                ctx_content = if(length(ctx) == 1, do: hd(ctx), else: nil)
+                {name, [ctx_content | Enum.map(actual_args, fn arg -> String.trim(arg) end)]}
+            end
+        end
 
       [_, name] ->
-        {name, ""}
+        case functions do
+          nil -> {name, []}
+          funs -> {name, [nil]}
+        end
 
       _ ->
         {:error, :invalid_declaration}
@@ -98,7 +128,7 @@ defmodule CSSEx.Helpers.Function do
 
   def finish_parse_call(%{functions: functions} = data, rem, acc) do
     fun_spec = IO.iodata_to_binary(acc)
-    {name, args} = extract_name_and_args(fun_spec)
+    {name, args} = extract_name_and_args(fun_spec, functions)
 
     case replace_args(args, data) do
       {:ok, final_args} ->
@@ -112,13 +142,18 @@ defmodule CSSEx.Helpers.Function do
                 {:ok, result} when is_binary(result) -> finish_call(data, rem, result)
                 {:ok, [_ | _] = result} -> finish_call(data, rem, IO.iodata_to_binary(result))
                 {:ok, result} -> finish_call(data, rem, to_string(result))
+
+                result when is_binary(result) -> finish_call(data, rem, result)
+                [_ | _] = result -> finish_call(data, rem, IO.iodata_to_binary(result))
                 error -> finish_error(data, error)
               end
             rescue
-              e ->
-                finish_error(data, {:function_call, name, e})
+              e -> finish_error(data, {:function_call, name, e})
             end
         end
+
+      {:error, error} ->
+        finish_error(data, error)
     end
   end
 

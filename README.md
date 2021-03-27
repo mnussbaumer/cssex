@@ -155,7 +155,7 @@ These scope ruling might still be changed regarding the scoped workings and the 
 
 ```elixir
 
-@fn lighten(color, percentage) {
+@fn lighten_test(color, percentage) ->
     {:ok, %CSSEx.HSLA{l: %CSSEx.Unit{value: l} = l_unit} = hsla} = 
                                                        CSSEx.HSLA.new_hsla(color)
 
@@ -168,12 +168,13 @@ These scope ruling might still be changed regarding the scoped workings and the 
 	 n_l when n_l < 0 -> 0
       end
 
-    {:ok, %CSSEx.HSLA{hsla | l: %CSSEx.Unit{l_unit | value: new_l}} |> to_string}
-};
+    %CSSEx.HSLA{hsla | l: %CSSEx.Unit{l_unit | value: new_l}}
+    |> to_string
+end;
 
 @!red red;
-.test{color: @fn::lighten(<$red$>, 10)}
-.test{color: @fn::lighten(#fdf, 10);}
+.test{color: @fn::lighten_test(<$red$>, 10)}
+.test{color: @fn::lighten_test(#fdf, 10);}
 ```
 
 ##### into
@@ -184,6 +185,69 @@ These scope ruling might still be changed regarding the scoped workings and the 
   color: hsla(300,7%,15%,1.0);
 }
 ```
+
+Functions can execute any code, and can receive an arbitrary block of content, that is made available in its body as a variable named, `ctx_content`. They need to return either `{:ok, binary | iodata}` or `binary | iodata`. You do not have access to functions, assigns, or variables inside functions, but you can pass them as arguments. The returned binary is also parsed before being inserted so you can also  make use of them on the returned result. 
+
+```	
+@fn enforce_size(what, size) ->
+  "#{what}: #{size};" <>
+  "min-#{what}: #{size};" <>
+  "max-#{what}: #{size};"
+end;
+
+@fn enforce_wh(width, height) ->
+  """
+  @fn::enforce_size(width, #{width})
+  @fn::enforce_size(height, #{height})
+  """
+end;
+
+@fn enforce_square(size) ->
+  """
+  @fn::enforce_size(width, #{size})
+  @fn::enforce_size(height, #{size})
+  """
+end;
+
+@fn enforce_circle(size) ->
+  """
+  @fn::enforce_square(#{size})
+  border-radius: 50%;
+  """
+end;
+
+@fn my_squarer(element) ->
+  """
+  #{element} {
+     #{ctx_content}
+     @fn::enforce_square(20px)
+  }
+  """
+end;
+```
+
+And then using for instance:
+
+```
+.section {
+  @fn::my_squarer(&.inner, color: red;)
+}
+```
+
+Results in:
+
+```
+.section.inner{
+  color:red;
+  width:20px;
+  min-width:20px;
+  max-width:20px;
+  height:20px;
+  min-height:20px;
+  max-height:20px;
+}
+```
+
 
 #### Assigns
 
@@ -361,9 +425,6 @@ In terms of speed, although I haven't done extensive benchmarking as I want firs
 ## Roadmap
 
 - Define the scoping rules and possibilities for variables, assigns, and functions
-- Finalize the `&` usage when placed as postfix
-- Basic functions such as: `lighten`, `darken`, etc.;
-- Mix task for parsing CSSEx files
 
 
 With these I would consider it feature complete.
