@@ -1,5 +1,7 @@
 defmodule CSSEx.Helpers.Functions do
+
   def lighten(_ctx_content, color, percentage) do
+
     {
       :ok,
       %CSSEx.HSLA{l: %CSSEx.Unit{value: l} = l_unit} = hsla
@@ -19,6 +21,7 @@ defmodule CSSEx.Helpers.Functions do
   end
 
   def darken(_ctx_content, color, percentage) do
+
     {
       :ok,
       %CSSEx.HSLA{l: %CSSEx.Unit{value: l} = l_unit} = hsla

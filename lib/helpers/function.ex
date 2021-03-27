@@ -142,6 +142,7 @@ defmodule CSSEx.Helpers.Function do
                 {:ok, result} when is_binary(result) -> finish_call(data, rem, result)
                 {:ok, [_ | _] = result} -> finish_call(data, rem, IO.iodata_to_binary(result))
                 {:ok, result} -> finish_call(data, rem, to_string(result))
+
                 result when is_binary(result) -> finish_call(data, rem, result)
                 [_ | _] = result -> finish_call(data, rem, IO.iodata_to_binary(result))
                 error -> finish_error(data, error)
