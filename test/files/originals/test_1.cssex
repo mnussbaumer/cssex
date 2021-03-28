@@ -30,4 +30,4 @@ div {
     color: <$primary$>
   }
 }
- .write{color:red;}
+ .write{color:red}

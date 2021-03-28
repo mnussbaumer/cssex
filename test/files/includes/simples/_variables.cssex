@@ -27,15 +27,20 @@ end;
 
 %!sides %{left: "l", top: "t", right: "r", bottom: "b"};
 
+
+/* it reads as {color, inverse, {direction, direction}}, where direction is true or false and means, 
+if it's to darken (true) or lighten (false) the color when applying hover effects and such
+*/
+
 %!color_map %{
-  white: "white",
-  black: "black",
-  text: "#152734",
-  primary: "#ee483e",
-  secondary: "#2d4049",
-  tertiary: "rgb(255, 235, 155)",
-  warning: "#E07000",
-  error: "#ff2100",
-  info: "#00A6E0",
-  success: "#4ad887"
+    white: {"white", "black", {true, false}},
+    black: {"black", "white", {false, true}},
+    text:  {"#152734", "white", {false, true}},
+    primary: {"#ee483e", "white", {false, true}},
+    secondary: {"#2d4049", "black", {true, false}},
+    tertiary: {"rgb(255, 235, 155)", "white", {false, true}},
+    warning: {"#E07000", "white", {false, true}},
+    error: {"#ff2100", "white", {false, true}},
+    info: {"#00A6E0", "white", {false, true}},
+    success: {"#4ad887", "white", {false, true}}
 };

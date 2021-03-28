@@ -17,16 +17,21 @@ defmodule CSSEx.Helpers.EEX do
   end
 
   def finish(rem, %{line: line} = data, %{acc: eex_block} = state) do
-    acc = IO.iodata_to_binary(eex_block)
+    acc = IO.chardata_to_string(eex_block)
+    # TODO final might return an error which makes for less helpful error msg
     final = eval_with_bindings(acc, data)
     line_correction = calc_line_offset(state, final)
 
-    {:ok, {final <> rem, %{close_current(data) | line: line + line_correction}}}
+    new_final = :lists.flatten([to_charlist(final) | rem])
+    :erlang.garbage_collect()
+    {:ok, {new_final, %{close_current(data) | line: line + line_correction}}}
   rescue
-    error -> {:error, add_error(data, error_msg({:eex, error}))}
+    error ->
+      IO.inspect(error)
+      {:error, add_error(data, error_msg({:eex, error}))}
   end
 
-  def do_parse(<<>>, data, %{column: col, line: line}) do
+  def do_parse([], data, %{column: col, line: line}) do
     new_data =
       data
       |> inc_line(line)
@@ -35,8 +40,8 @@ defmodule CSSEx.Helpers.EEX do
     {:error, new_data}
   end
 
-  def do_parse(<<"<% end %>", rem::binary>>, data, %{acc: acc} = state) do
-    %{state | acc: [acc | "<% end %>"]}
+  def do_parse('<% end %>' ++ rem, data, %{acc: acc} = state) do
+    %{state | acc: [acc | '<% end %>']}
     |> inc_col(9)
     |> inc_level(-1)
     |> case do
@@ -45,25 +50,25 @@ defmodule CSSEx.Helpers.EEX do
     end
   end
 
-  def do_parse(<<"<%", rem::binary>>, data, %{acc: acc, level: level} = state) do
+  def do_parse('<%' ++ rem, data, %{acc: acc, level: level} = state) do
     new_state =
       state
       |> inc_col(2)
       |> inc_level()
 
-    do_parse(rem, data, %{new_state | acc: [acc | "<%"], level: level + 1})
+    do_parse(rem, data, %{new_state | acc: [acc | '<%'], level: level + 1})
   end
 
-  def do_parse(<<"do %>", rem::binary>>, data, %{acc: acc} = state) do
+  def do_parse('do %>' ++ rem, data, %{acc: acc} = state) do
     new_state =
       state
       |> inc_col(5)
 
-    do_parse(rem, data, %{new_state | acc: [acc | "do %>"]})
+    do_parse(rem, data, %{new_state | acc: [acc | 'do %>']})
   end
 
-  def do_parse(<<"%>", rem::binary>>, data, %{acc: acc} = state) do
-    %{state | acc: [acc | "%>"]}
+  def do_parse('%>' ++ rem, data, %{acc: acc} = state) do
+    %{state | acc: [acc | '%>']}
     |> inc_col(2)
     |> inc_level(-1)
     |> case do
@@ -73,17 +78,17 @@ defmodule CSSEx.Helpers.EEX do
   end
 
   Enum.each(@line_terminators, fn char ->
-    def do_parse(<<unquote(char), rem::binary>>, data, %{acc: acc} = state),
-      do: do_parse(rem, data, inc_line(%{state | acc: [acc | unquote(char)]}))
+    def do_parse([unquote(char) | rem], data, %{acc: acc} = state),
+      do: do_parse(rem, data, inc_line(%{state | acc: [acc, unquote(char)]}))
   end)
 
   Enum.each(@white_space, fn char ->
-    def do_parse(<<unquote(char), rem::binary>>, data, %{acc: acc} = state),
-      do: do_parse(rem, data, inc_col(%{state | acc: [acc | unquote(char)]}))
+    def do_parse([unquote(char) | rem], data, %{acc: acc} = state),
+      do: do_parse(rem, data, inc_col(%{state | acc: [acc, unquote(char)]}))
   end)
 
-  def do_parse(<<char::binary-size(1), rem::binary>>, data, %{acc: acc} = state),
-    do: do_parse(rem, data, inc_col(%{state | acc: [acc | char]}))
+  def do_parse([char | rem], data, %{acc: acc} = state),
+    do: do_parse(rem, data, inc_col(%{state | acc: [acc, char]}))
 
   def replace_and_extract_assigns(acc, matches, %{assigns: assigns, local_assigns: local_assigns}) do
     Enum.reduce_while(matches, {acc, []}, fn <<"%::", name::binary>> = full,
@@ -125,5 +130,4 @@ defmodule CSSEx.Helpers.EEX do
         Map.merge(a, la),
         fn {k, v} -> {String.to_atom(k), v} end
       )
-
 end

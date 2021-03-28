@@ -14,7 +14,7 @@ defmodule CSSEx.Charset.Test do
   end
 
   test "doesn't output the @charset rule if it's invalidly placed and emits warning" do
-    assert {:ok, %{warnings: [warning]}, "div{color:white;}\n"} = Parser.parse(@invalid_charset)
+    assert {:ok, %{warnings: [warning]}, "div{color:white}\n"} = Parser.parse(@invalid_charset)
 
     assert warning =~ "@charset declaration must be the first rule in a spreadsheet"
   end

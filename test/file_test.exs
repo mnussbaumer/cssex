@@ -35,7 +35,7 @@ defmodule CSSEx.File.Test do
     {:ok, %{target_originals: target_originals, non_existing: non_existing_path}}
   end
 
-  @full_final_css ".test_2{background-color:#ffffff;color:#000000;}.test_1{background-color:#000000;color:#ffffff;}div{color:black;color:white;background-color:red;}div:hover{cursor:pointer;background-color:green;color:purple;}\n"
+  @full_final_css ".test_2{background-color:#ffffff;color:#000000}.test_1{background-color:#000000;color:#ffffff}div{color:black;color:white;background-color:red}div:hover{cursor:pointer;background-color:green;color:purple}\n"
 
   test "parses a file", %{target_originals: base_path} do
     final_path = Path.join([base_path, "test_1.cssex"])
@@ -61,7 +61,7 @@ defmodule CSSEx.File.Test do
     to_change_original = Path.join([target_originals, "test_1.cssex"])
     {:ok, original_handler} = File.open(to_change_original, [:append])
 
-    to_write = ".write{color:red;}"
+    to_write = ".write{color:red}"
     IO.write(original_handler, to_write)
     assert :ok = File.close(original_handler)
 
@@ -112,7 +112,7 @@ defmodule CSSEx.File.Test do
     assert :ready = :gen_statem.call(pid, :status)
 
     {:ok, base_handler} = File.open(base_path, [:append])
-    to_write = ".write{color:red;}"
+    to_write = ".write{color:red}"
     IO.write(base_handler, to_write)
     assert :ok = File.close(base_handler)
 

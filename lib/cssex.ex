@@ -218,6 +218,11 @@ defmodule CSSEx do
 
         {:keep_state, new_data,
          [{:next_event, :internal, {:post_process, parser, file_contents}}]}
+
+      {:error, %CSSEx.Parser{error: error, file: original_file} = cssex} ->
+        Logger.error("CSSEx Watcher ERROR parsing: #{original_file} :: \n\n #{error}")
+        Logger.error("#{inspect(cssex)}")
+        {:keep_state_and_data, []}
     end
   end
 

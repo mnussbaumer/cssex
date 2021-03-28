@@ -23,14 +23,14 @@ defmodule CSSEx.Media.Test do
              """)
 
     assert parsed =~
-             "@media screen and (max-width:600px){.test div.example{display:none;}.test{font-family:Arial;background-color:black;}}\n"
+             "@media screen and (max-width:600px){.test div.example{display:none}.test{font-family:Arial;background-color:black}}\n"
 
-    assert parsed =~ ".test{color:red;}"
+    assert parsed =~ ".test{color:red}"
   end
 
   test "replacement of variables inside media works correctly" do
     assert {:ok, _,
-            "@media print and (max-width:565px and min-width:300px), (min-width:565px){.test{color:blue;}}\n"} =
+            "@media print and (max-width:565px and min-width:300px), (min-width:565px){.test{color:blue}}\n"} =
              Parser.parse("""
              @!max-width 565px;
              .test {
@@ -43,7 +43,7 @@ defmodule CSSEx.Media.Test do
 
   test "nested media components compose" do
     assert {:ok, _,
-            "@media print and (max-width:565px){.test{color:red;}}@media print and (max-width:565px) and (min-width:300px){.test.inner{color:blue;}.test{color:orange;}}\n"} =
+            "@media print and (max-width:565px){.test{color:red}}@media print and (max-width:565px) and (min-width:300px){.test.inner{color:blue}.test{color:orange}}\n"} =
              Parser.parse("""
              @!color orange;
              @!min_width 300px;

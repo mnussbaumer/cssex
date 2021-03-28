@@ -9,10 +9,10 @@ defmodule CSSEx.Helpers.Function do
     # we reached the end of the function declaration
     def parse(
           %{current_value: current_value, current_function: fn_iodata} = data,
-          <<"end;", unquote(char), rem::binary>>
+          'end;' ++ [unquote(char) | rem]
         ) do
-      cval = String.trim(IO.iodata_to_binary(current_value))
-      fun_string = String.trim(IO.iodata_to_binary(fn_iodata))
+      cval = String.trim(IO.chardata_to_string(current_value))
+      fun_string = String.trim(IO.chardata_to_string(fn_iodata))
       {name, args} = extract_name_and_args(cval)
 
       full_string =
@@ -39,21 +39,21 @@ defmodule CSSEx.Helpers.Function do
       {:ok, {new_data, rem}}
     end
 
-    def parse(%{current_function: cfun} = data, <<unquote(char), rem::binary>>) do
+    def parse(%{current_function: cfun} = data, [unquote(char) | rem]) do
       %{data | current_function: [cfun, unquote(char)]}
       |> inc_line()
       |> parse(rem)
     end
   end)
 
-  def parse(%{current_function: cfun} = data, <<char::binary-size(1), rem::binary>>) do
+  def parse(%{current_function: cfun} = data, [char | rem]) do
     %{data | current_function: [cfun, char]}
     |> inc_col()
     |> parse(rem)
   end
 
   def extract_name_and_args(declaration, functions \\ nil) do
-    case Regex.run(~r/(.+)\((.+)?\)/s, declaration) do
+    case Regex.run(~r/(^[^\(]*)\((.+)?\)/s, declaration) do
       [_, name, args] ->
         case functions do
           nil ->
@@ -71,7 +71,8 @@ defmodule CSSEx.Helpers.Function do
 
               fun ->
                 {:arity, ar} = Function.info(fun, :arity)
-                split_args = String.split(args, ",", trim: true, parts: ar)
+
+                split_args = CSSEx.Helpers.Shared.search_args_split(to_charlist(args), ar - 1)
                 {actual_args, ctx} = Enum.split(split_args, ar - 1)
                 ctx_content = if(length(ctx) == 1, do: hd(ctx), else: nil)
                 {name, [ctx_content | Enum.map(actual_args, fn arg -> String.trim(arg) end)]}
@@ -99,35 +100,35 @@ defmodule CSSEx.Helpers.Function do
     end
   end
 
-  def do_parse_call(data, <<"(", rem::binary>>, acc, level) do
+  def do_parse_call(data, [?( | rem], acc, level) do
     data
     |> inc_col()
-    |> do_parse_call(rem, [acc, "("], level + 1)
+    |> do_parse_call(rem, [acc, ?(], level + 1)
   end
 
-  def do_parse_call(data, <<")", rem::binary>>, acc, 1) do
+  def do_parse_call(data, [?) | rem], acc, 1) do
     data
     |> inc_col()
-    |> finish_parse_call(rem, [acc, ")"])
+    |> finish_parse_call(rem, [acc, ?)])
   end
 
-  def do_parse_call(data, <<")", rem::binary>>, acc, level) do
+  def do_parse_call(data, [?) | rem], acc, level) do
     data
     |> inc_col()
-    |> do_parse_call(rem, [acc, ")"], level - 1)
+    |> do_parse_call(rem, [acc, ?)], level - 1)
   end
 
-  def do_parse_call(data, <<char::binary-size(1), rem::binary>>, acc, level) do
+  def do_parse_call(data, [char | rem], acc, level) do
     data
     |> inc_col()
     |> do_parse_call(rem, [acc, char], level)
   end
 
-  def do_parse_call(data, <<>>, _acc, _level),
+  def do_parse_call(data, [], _acc, _level),
     do: {:error, add_error(data, error_msg({:malformed, :function_call}))}
 
   def finish_parse_call(%{functions: functions} = data, rem, acc) do
-    fun_spec = IO.iodata_to_binary(acc)
+    fun_spec = IO.chardata_to_string(acc)
     {name, args} = extract_name_and_args(fun_spec, functions)
 
     case replace_args(args, data) do
@@ -139,16 +140,27 @@ defmodule CSSEx.Helpers.Function do
           function when is_function(function) ->
             try do
               case apply(function, final_args) do
-                {:ok, result} when is_binary(result) -> finish_call(data, rem, result)
-                {:ok, [_ | _] = result} -> finish_call(data, rem, IO.iodata_to_binary(result))
-                {:ok, result} -> finish_call(data, rem, to_string(result))
+                {:ok, result} when is_binary(result) ->
+                  finish_call(data, rem, to_charlist(result))
 
-                result when is_binary(result) -> finish_call(data, rem, result)
-                [_ | _] = result -> finish_call(data, rem, IO.iodata_to_binary(result))
-                error -> finish_error(data, error)
+                {:ok, [_ | _] = result} ->
+                  finish_call(data, rem, to_charlist(IO.iodata_to_binary(result)))
+
+                {:ok, result} ->
+                  finish_call(data, rem, to_charlist(to_string(result)))
+
+                result when is_binary(result) ->
+                  finish_call(data, rem, to_charlist(result))
+
+                [_ | _] = result ->
+                  finish_call(data, rem, to_charlist(IO.iodata_to_binary(result)))
+
+                error ->
+                  finish_error(data, error)
               end
             rescue
-              e -> finish_error(data, {:function_call, name, e})
+              e ->
+                finish_error(data, {:function_call, name, e})
             end
         end
 
@@ -158,7 +170,7 @@ defmodule CSSEx.Helpers.Function do
   end
 
   def finish_call(data, rem, result) do
-    {:ok, {data, <<result::binary, rem::binary>>}}
+    {:ok, {data, :lists.flatten([result | rem])}}
   end
 
   def finish_error(data, error),

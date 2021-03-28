@@ -58,7 +58,6 @@ end;
 @fn breakpoint_max(bp, breakpoints) ->
   bp = String.to_existing_atom(bp)
   max = Keyword.get(breakpoints, bp)
-
   "@media screen and (max-width: #{max}) { #{ctx_content} }"
 end;
 
@@ -82,4 +81,12 @@ end;
     box-shadow: 0;
   }
   """
+end;
+
+
+@fn darken_or_lighten(direction, color, percentage) ->
+  case String.to_existing_atom(direction) do
+    true -> "@fn::darken(#{color}, #{percentage})"
+    false -> "@fn::lighten(#{color}, #{percentage})"
+  end
 end;
