@@ -11,7 +11,7 @@ defmodule CSSEx.Parser.Test do
       div { width: <$test$>; }
       """,
       """
-      div{width:16px;}
+      div{width:16px}
       """
     },
     {
@@ -24,7 +24,7 @@ defmodule CSSEx.Parser.Test do
       }
       """,
       [
-        "div{width:16px;}",
+        "div{width:16px}",
         ":root{--test:16px;}"
       ]
     },
@@ -66,9 +66,9 @@ defmodule CSSEx.Parser.Test do
       div { color: black; }
       """,
       [
-        ".test_1{background-color:#000000;color:#ffffff;}",
-        ".test_2{background-color:#ffffff;color:#000000;}",
-        "div{color:black;}"
+        ".test_1{background-color:#000000;color:#ffffff}",
+        ".test_2{background-color:#ffffff;color:#000000}",
+        "div{color:black}"
       ]
     },
     {
@@ -80,7 +80,7 @@ defmodule CSSEx.Parser.Test do
         border: 2<$test$> solid red;
       }
       """,
-      "div{border:2px solid red;}\n"
+      "div{border:2px solid red}\n"
     },
     {
       "interpolation works in rules and other non-attributes",
@@ -89,7 +89,7 @@ defmodule CSSEx.Parser.Test do
       div.<$test$>{border:2px solid red;
       }
       """,
-      "div.sm{border:2px solid red;}\n"
+      "div.sm{border:2px solid red}\n"
     }
   ]
 

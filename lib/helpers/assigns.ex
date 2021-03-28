@@ -12,11 +12,11 @@ defmodule CSSEx.Helpers.Assigns do
   # termination when parsing the assign
   Enum.each(@line_terminators, fn char ->
     def parse(
-          <<?;, unquote(char), rem::binary>>,
+          [?;, unquote(char) | rem],
           %{current_assign: current_key, current_value: current_value, line: line} = data
         ) do
-      ckey = IO.iodata_to_binary(current_key)
-      cval = String.trim_trailing(IO.iodata_to_binary(current_value))
+      ckey = IO.chardata_to_string(current_key)
+      cval = String.trim_trailing(IO.chardata_to_string(current_value))
 
       {final_val, _} = Code.eval_string(cval, build_bindings(data), line: line)
 
@@ -32,16 +32,16 @@ defmodule CSSEx.Helpers.Assigns do
         {rem, add_error(data, error_msg({:assigns, error}))}
     end
 
-    def parse(<<unquote(char), rem::binary>>, %{current_value: cval} = data),
-      do: parse(rem, inc_line(%{data | current_value: [cval | unquote(char)]}))
+    def parse([unquote(char) | rem], %{current_value: cval} = data),
+      do: parse(rem, inc_line(%{data | current_value: [cval, unquote(char)]}))
   end)
 
   # acc the assign, given this is elixir we accumulate any char, we'll validate once we try to compile it
-  def parse(<<char::binary-size(1), rem::binary>>, %{current_value: cval} = data),
-    do: parse(rem, inc_col(%{data | current_value: [cval | char]}))
+  def parse([char | rem], %{current_value: cval} = data),
+    do: parse(rem, inc_col(%{data | current_value: [cval, char]}))
 
-  def parse(<<>>, data),
-    do: {<<>>, add_error(data)}
+  def parse([], data),
+    do: {[], add_error(data)}
 
   def add_assign(
         %{current_scope: :global, assigns: assigns, local_assigns: local_assigns} = data,

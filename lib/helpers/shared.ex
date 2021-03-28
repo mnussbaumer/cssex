@@ -132,6 +132,44 @@ defmodule CSSEx.Helpers.Shared do
 
   def is_lead_concat(_), do: false
 
+  @doc """
+  Produces a list of lists where each list is a chain of selectors, representing all combinations between the selectors that need to occurr when a "," comma is found.
+  If we have a cssex rule of:
+
+  .class_1, .class_2 {
+     &.class_3, .class_4 {
+     }
+  }
+
+  Then we have a chain that we can split as:
+  iex> split_chains([".class_1, .class_2", "&.class_3, .class_4"])
+  [
+    [".class_1", "&.class_3"],
+    [".class_1", ".class_4"],
+    [".class_2", "&.class_3"],
+    [".class_2", ".class_4"]
+  ]
+
+  These then can be passed through `ampersand_join` in order to produce:
+  [
+    [".class_1.class_3"],
+    [".class_1", ".class_4"],
+    [".class_2.class_3"],
+    [".class_2", ".class_4"]
+  ]
+
+  Then a list of final strings:
+  [
+    ".class_1.class_3",
+    ".class_1 .class_4",
+    ".class_2.class_3",
+    ".class_2 .class_4"
+  ]
+
+  Which then can be joined together into a single css declaration:
+  ".class_1.class_3, .class_1 .class_4, .class_2.class_3, .class_2 .class_4"
+  """
+  @spec split_chains(list(String.t())) :: list(list(String.t()))
   def split_chains(initial), do: split_chains(initial, [])
 
   def split_chains([], acc) do
@@ -173,5 +211,36 @@ defmodule CSSEx.Helpers.Shared do
       end)
 
     split_chains(t, new_acc)
+  end
+
+  def search_args_split(text, n), do: search_args_split(text, n, 0, [], [])
+
+  def search_args_split([], _, _, acc, full_acc) do
+    final_full_acc =
+      case IO.chardata_to_string(acc) |> String.trim() do
+        "" -> full_acc
+        final_arg -> [final_arg | full_acc]
+      end
+
+    :lists.reverse(final_full_acc)
+  end
+
+  def search_args_split([char | rem], 0, levels, acc, full_acc) do
+    search_args_split(rem, 0, levels, [acc, char], full_acc)
+  end
+
+  def search_args_split([?) | rem], n, levels, acc, full_acc)
+      when levels > 0 and n > 0 do
+    search_args_split(rem, n, levels - 1, [acc, ?)], full_acc)
+  end
+
+  def search_args_split([?( | rem], n, levels, acc, full_acc),
+    do: search_args_split(rem, n, levels + 1, [acc, ?(], full_acc)
+
+  def search_args_split([?, | rem], n, 0, acc, full_acc),
+    do: search_args_split(rem, n - 1, 0, [], [IO.chardata_to_string(acc) | full_acc])
+
+  def search_args_split([char | rem], n, levels, acc, full_acc) do
+    search_args_split(rem, n, levels, [acc, char], full_acc)
   end
 end

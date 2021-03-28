@@ -41,13 +41,13 @@ defmodule CSSEx.Parser do
     current_chain: [],
     split_chain: [[]],
     valid?: true,
-    current_key: "",
-    current_value: "",
-    current_var: "",
-    current_assign: "",
+    current_key: [],
+    current_value: [],
+    current_var: [],
+    current_assign: [],
     current_scope: nil,
     current_add_var: false,
-    current_function: "",
+    current_function: [],
     functions: @functions,
     level: 0,
     charset: nil,
@@ -61,7 +61,7 @@ defmodule CSSEx.Parser do
     font_face_count: 0,
     imports: [],
     dependencies: [],
-    search_acc: ""
+    search_acc: []
   ]
 
   @white_space CSSEx.Helpers.WhiteSpace.code_points()
@@ -104,11 +104,16 @@ defmodule CSSEx.Parser do
   Again, a predefined %__MODULE__{} struct can be passed as the first argument to
   force the parser to operate from that, including adding assigns or scope.
   """
+  def parse(content) when is_binary(content),
+    do: parse(to_charlist(content))
 
   def parse(content) do
     {:ok, pid} = __MODULE__.start_link()
     :gen_statem.call(pid, {:start, content})
   end
+
+  def parse(%__MODULE__{} = data, content) when is_binary(content),
+    do: parse(data, to_charlist(content))
 
   def parse(%__MODULE__{} = data, content) do
     {:ok, pid} = __MODULE__.start_link(data)
@@ -173,8 +178,8 @@ defmodule CSSEx.Parser do
          ]}
 
       _ ->
-        case File.read(path) do
-          {:ok, content} ->
+        case File.open(path, [:read, :charlist]) do
+          {:ok, device} ->
             new_data = %__MODULE__{
               data
               | answer_to: from,
@@ -184,7 +189,7 @@ defmodule CSSEx.Parser do
             }
 
             {:next_state, {:parse, :next}, new_data,
-             [{:next_event, :internal, {:parse, content}}]}
+             [{:next_event, :internal, {:parse, IO.read(device, :all)}}]}
 
           {:error, :enoent} ->
             {:stop_and_reply, :normal,
@@ -206,7 +211,7 @@ defmodule CSSEx.Parser do
 
   # we have reached the end of the binary, there's nothing else to do except answer
   # the caller, if we're in something else than {:parse, :next} it's an error
-  def handle_event(:internal, {:parse, ""}, state, %{answer_to: from} = data) do
+  def handle_event(:internal, {:parse, []}, state, %{answer_to: from} = data) do
     case state do
       {:parse, :next} ->
         reply_finish(data)
@@ -220,11 +225,11 @@ defmodule CSSEx.Parser do
   end
 
   # handle comments
-  ["//", "/*"]
+  ['//', '/*']
   |> Enum.each(fn chars ->
     def handle_event(
           :internal,
-          {:parse, <<unquote(chars), rem::binary>>},
+          {:parse, unquote(chars) ++ rem},
           _state,
           data
         ) do
@@ -249,7 +254,7 @@ defmodule CSSEx.Parser do
   # module as it has its own parsing nuances
   def handle_event(
         :internal,
-        {:parse, <<"@fn::", rem::binary>>},
+        {:parse, '@fn::' ++ rem},
         state,
         data
       ) do
@@ -271,10 +276,10 @@ defmodule CSSEx.Parser do
     end
   end
 
-  Enum.each([{"]", "["}, {")", "("}, {?", ?"}, {"'", "'"}], fn {char, opening} ->
+  Enum.each([{?], ?[}, {?), ?(}, {?", ?"}, {?', ?'}], fn {char, opening} ->
     def handle_event(
           :internal,
-          {:parse, <<unquote(char), rem::binary>>},
+          {:parse, [unquote(char) | rem]},
           {:find_terminator, unquote(opening), [], state},
           %{search_acc: acc} = data
         ) do
@@ -289,7 +294,7 @@ defmodule CSSEx.Parser do
 
     def handle_event(
           :internal,
-          {:parse, <<unquote(char), rem::binary>>},
+          {:parse, [unquote(char) | rem]},
           {:find_terminator, unquote(opening), [next_search | old_search], state},
           %{search_acc: acc} = data
         ) do
@@ -303,10 +308,10 @@ defmodule CSSEx.Parser do
     end
   end)
 
-  Enum.each(["[", "(", ?", "'"], fn char ->
+  Enum.each([?[, ?(, ?", ?'], fn char ->
     def handle_event(
           :internal,
-          {:parse, <<unquote(char), rem::binary>>},
+          {:parse, [unquote(char) | rem]},
           state,
           %{search_acc: acc} = data
         ) do
@@ -330,7 +335,7 @@ defmodule CSSEx.Parser do
   Enum.each(@line_terminators, fn char ->
     def handle_event(
           :internal,
-          {:parse, <<unquote(char), rem::binary>>},
+          {:parse, [unquote(char) | rem]},
           {:find_terminator, _, _, _},
           %{search_acc: acc} = data
         ) do
@@ -344,7 +349,7 @@ defmodule CSSEx.Parser do
 
   def handle_event(
         :internal,
-        {:parse, <<char::binary-size(1), rem::binary>>},
+        {:parse, [char | rem]},
         {:find_terminator, _, _, _},
         %{search_acc: acc} = data
       ) do
@@ -357,7 +362,7 @@ defmodule CSSEx.Parser do
 
   def handle_event(
         :internal,
-        {:parse, <<"@fn", rem::binary>>},
+        {:parse, '@fn' ++ rem},
         {:parse, :next},
         data
       ) do
@@ -372,7 +377,7 @@ defmodule CSSEx.Parser do
 
   def handle_event(
         :internal,
-        {:parse, <<"@include", rem::binary>>},
+        {:parse, '@include' ++ rem},
         {:parse, :next},
         data
       ) do
@@ -386,7 +391,7 @@ defmodule CSSEx.Parser do
 
   def handle_event(
         :internal,
-        {:parse, <<"@import", rem::binary>>},
+        {:parse, '@import' ++ rem},
         {:parse, :next},
         data
       ) do
@@ -400,7 +405,7 @@ defmodule CSSEx.Parser do
 
   def handle_event(
         :internal,
-        {:parse, <<"@charset", rem::binary>>},
+        {:parse, '@charset' ++ rem},
         {:parse, :next},
         data
       ) do
@@ -414,7 +419,7 @@ defmodule CSSEx.Parser do
 
   def handle_event(
         :internal,
-        {:parse, <<"@media", rem::binary>>},
+        {:parse, '@media' ++ rem},
         {:parse, :next},
         data
       ) do
@@ -428,7 +433,7 @@ defmodule CSSEx.Parser do
 
   def handle_event(
         :internal,
-        {:parse, <<"@keyframes", rem::binary>>},
+        {:parse, '@keyframes' ++ rem},
         {:parse, :next},
         data
       ) do
@@ -443,7 +448,7 @@ defmodule CSSEx.Parser do
 
   def handle_event(
         :internal,
-        {:parse, <<"@font-face", rem::binary>>},
+        {:parse, '@font-face' ++ rem},
         {:parse, :next},
         %{current_chain: [], font_face: false, font_face_count: ffc} = data
       ) do
@@ -460,7 +465,7 @@ defmodule CSSEx.Parser do
   # font-face toggle and resume normal parsing
   def handle_event(
         :internal,
-        {:parse, <<125, rem::binary>>},
+        {:parse, [125 | rem]},
         {:parse, :next},
         %{font_face: true} = data
       ) do
@@ -476,7 +481,7 @@ defmodule CSSEx.Parser do
   # chain ditching our last value in it, and start searching for the next token
   def handle_event(
         :internal,
-        {:parse, <<125, rem::binary>>},
+        {:parse, [125 | rem]},
         {:parse, :next},
         %{current_chain: [_ | _]} = data
       ) do
@@ -493,7 +498,7 @@ defmodule CSSEx.Parser do
   # error out
   def handle_event(
         :internal,
-        {:parse, <<125, _::binary>>},
+        {:parse, [125 | _]},
         {:parse, :next},
         %{answer_to: from, current_chain: [], level: 0} = data
       ) do
@@ -505,7 +510,7 @@ defmodule CSSEx.Parser do
   # the col and return to original the current data and the remaining text
   def handle_event(
         :internal,
-        {:parse, <<125, rem::binary>>},
+        {:parse, [125 | rem]},
         {:parse, :next},
         %{answer_to: from, current_chain: []} = data
       ),
@@ -515,7 +520,7 @@ defmodule CSSEx.Parser do
   # have and add a warning
   def handle_event(
         :internal,
-        {:parse, <<125, rem::binary>>},
+        {:parse, [125 | rem]},
         {:parse, :current_var} = state,
         data
       ) do
@@ -535,24 +540,24 @@ defmodule CSSEx.Parser do
   # there and just reparse adding the ; to the beggining
   def handle_event(
         :internal,
-        {:parse, <<125, _::binary>> = full},
+        {:parse, [125 | _] = full},
         {:parse, :current_key},
         %{current_chain: [_ | _]} = data
       ) do
-    {:keep_state, data, [{:next_event, :internal, {:parse, <<";", full::binary>>}}]}
+    {:keep_state, data, [{:next_event, :internal, {:parse, [?; | full]}}]}
   end
 
   # we reached an eex opening tag, because it requires dedicated handling and parsing
   # we move to a different parse step
   def handle_event(
         :internal,
-        {:parse, <<"<%", _::binary>> = full},
+        {:parse, '<%' ++ _ = full},
         _state,
         data
       ) do
     case CSSEx.Helpers.EEX.parse(full, data) do
       {:error, new_data} ->
-        {:keep_state, add_error(new_data), [{:next_event, :internal, {:parse, <<>>}}]}
+        {:keep_state, add_error(new_data), [{:next_event, :internal, {:parse, []}}]}
 
       {new_rem, %__MODULE__{} = new_data} ->
         {:keep_state, new_data, [{:next_event, :internal, {:parse, new_rem}}]}
@@ -564,7 +569,7 @@ defmodule CSSEx.Parser do
     #  if we are parsing a var this is an error though
     def handle_event(
           :internal,
-          {:parse, <<unquote(char), rem::binary>>},
+          {:parse, [unquote(char) | rem]},
           state,
           data
         )
@@ -574,7 +579,7 @@ defmodule CSSEx.Parser do
 
     def handle_event(
           :internal,
-          {:parse, <<unquote(char), rem::binary>>},
+          {:parse, [unquote(char) | rem]},
           _state,
           data
         ),
@@ -586,7 +591,7 @@ defmodule CSSEx.Parser do
     # keep searching
     def handle_event(
           :internal,
-          {:parse, <<unquote(char), rem::binary>>},
+          {:parse, [unquote(char) | rem]},
           {:parse, :next},
           data
         ),
@@ -595,7 +600,7 @@ defmodule CSSEx.Parser do
     # we reached a white-space while building a variable, move to parse the value now
     def handle_event(
           :internal,
-          {:parse, <<unquote(char), rem::binary>>},
+          {:parse, [unquote(char) | rem]},
           {:parse, :current_var},
           data
         ),
@@ -608,7 +613,7 @@ defmodule CSSEx.Parser do
     # validated by compiling it so we do it in a special parse step
     def handle_event(
           :internal,
-          {:parse, <<unquote(char), rem::binary>>},
+          {:parse, [unquote(char) | rem]},
           {:parse, :current_assign},
           data
         ) do
@@ -622,14 +627,14 @@ defmodule CSSEx.Parser do
     # the whitespace in the value
     def handle_event(
           :internal,
-          {:parse, <<unquote(char), rem::binary>>},
+          {:parse, [unquote(char) | rem]},
           {:parse, :value, type},
           %{current_value: cval} = data
         )
         when type in [:media, :keyframes, :import, :include],
         do: {
           :keep_state,
-          %{data | current_value: [cval | unquote(char)]},
+          %{data | current_value: [cval, unquote(char)]},
           [{:next_event, :internal, {:parse, rem}}]
         }
 
@@ -638,7 +643,7 @@ defmodule CSSEx.Parser do
     # and the type of key we're searching
     def handle_event(
           :internal,
-          {:parse, <<unquote(char), rem::binary>>},
+          {:parse, [unquote(char) | rem]},
           {:parse, :value, type},
           data
         ) do
@@ -646,14 +651,14 @@ defmodule CSSEx.Parser do
       new_data = inc_col(data)
 
       case Map.fetch!(data, type) do
-        "" ->
+        [] ->
           {:keep_state, new_data, [{:next_event, :internal, {:parse, rem}}]}
 
         nil when type in [:charset] ->
           {:keep_state, new_data, [{:next_event, :internal, {:parse, rem}}]}
 
         val ->
-          new_data_2 = Map.put(new_data, type, [val | unquote(char)])
+          new_data_2 = Map.put(new_data, type, [val, unquote(char)])
 
           {:keep_state, new_data_2, [{:next_event, :internal, {:parse, rem}}]}
       end
@@ -664,7 +669,7 @@ defmodule CSSEx.Parser do
   # parsing it
   def handle_event(
         :internal,
-        {:parse, <<"%!", rem::binary>>},
+        {:parse, '%!' ++ rem},
         {:parse, :next},
         data
       ) do
@@ -679,7 +684,7 @@ defmodule CSSEx.Parser do
 
   def handle_event(
         :internal,
-        {:parse, <<"%()", rem::binary>>},
+        {:parse, '%()' ++ rem},
         {:parse, :next},
         data
       ) do
@@ -694,7 +699,7 @@ defmodule CSSEx.Parser do
 
   def handle_event(
         :internal,
-        {:parse, <<"%?", rem::binary>>},
+        {:parse, '%?' ++ rem},
         {:parse, :next},
         data
       ) do
@@ -710,7 +715,7 @@ defmodule CSSEx.Parser do
   # We found a var assignment when searching for the next token, prepare for parsing it
   def handle_event(
         :internal,
-        {:parse, <<"@!", rem::binary>>},
+        {:parse, '@!' ++ rem},
         {:parse, :next},
         data
       ) do
@@ -725,7 +730,7 @@ defmodule CSSEx.Parser do
 
   def handle_event(
         :internal,
-        {:parse, <<"@*!", rem::binary>>},
+        {:parse, '@*!' ++ rem},
         {:parse, :next},
         data
       ) do
@@ -741,7 +746,7 @@ defmodule CSSEx.Parser do
 
   def handle_event(
         :internal,
-        {:parse, <<"@()", rem::binary>>},
+        {:parse, '@()' ++ rem},
         {:parse, :next},
         data
       ) do
@@ -756,7 +761,7 @@ defmodule CSSEx.Parser do
 
   def handle_event(
         :internal,
-        {:parse, <<"@*()", rem::binary>>},
+        {:parse, '@*()' ++ rem},
         {:parse, :next},
         data
       ) do
@@ -772,7 +777,7 @@ defmodule CSSEx.Parser do
 
   def handle_event(
         :internal,
-        {:parse, <<"@?", rem::binary>>},
+        {:parse, '@?' ++ rem},
         {:parse, :next},
         data
       ) do
@@ -787,7 +792,7 @@ defmodule CSSEx.Parser do
 
   def handle_event(
         :internal,
-        {:parse, <<"@*?", rem::binary>>},
+        {:parse, '@*?' ++ rem},
         {:parse, :next},
         data
       ) do
@@ -807,7 +812,7 @@ defmodule CSSEx.Parser do
   # text-editor identation)
   def handle_event(
         :internal,
-        {:parse, <<123, rem::binary>>},
+        {:parse, [123 | rem]},
         {:parse, :current_key},
         data
       ) do
@@ -830,7 +835,7 @@ defmodule CSSEx.Parser do
   # there
   def handle_event(
         :internal,
-        {:parse, <<123, rem::binary>>},
+        {:parse, [123 | rem]},
         {:parse, :value, :media},
         data
       ) do
@@ -863,7 +868,7 @@ defmodule CSSEx.Parser do
   # @keyframes + animation name
   def handle_event(
         :internal,
-        {:parse, <<123, rem::binary>>},
+        {:parse, [123 | rem]},
         {:parse, :value, :keyframes},
         data
       ) do
@@ -891,7 +896,7 @@ defmodule CSSEx.Parser do
   # parsed content and create an anonymous fun
   def handle_event(
         :internal,
-        {:parse, <<"->", rem::binary>>},
+        {:parse, '->' ++ rem},
         {:parse, :value, :current_function},
         data
       ) do
@@ -913,7 +918,7 @@ defmodule CSSEx.Parser do
   # which means it's a regular css rule start, prepare for parsing it
   def handle_event(
         :internal,
-        {:parse, <<char, rem::binary>>},
+        {:parse, [char | rem]},
         {:parse, :next},
         data
       ) do
@@ -931,13 +936,13 @@ defmodule CSSEx.Parser do
   # new parser with the current ets table
   def handle_event(
         :internal,
-        {:parse, <<?;, rem::binary>>},
+        {:parse, [?; | rem]},
         {:parse, :value, :include},
         %{current_value: current_key, ets: ets, base_path: base_path} = data
       ) do
     file_path =
       current_key
-      |> IO.iodata_to_binary()
+      |> IO.chardata_to_string()
       |> String.replace(~r/\"?/, "")
       |> String.trim()
 
@@ -965,12 +970,12 @@ defmodule CSSEx.Parser do
   # to the correct scopes
   def handle_event(
         :internal,
-        {:parse, <<?;, rem::binary>>},
+        {:parse, [?; | rem]},
         {:parse, :value, :current_var},
         %{current_var: current_var, current_value: current_value} = data
       ) do
-    cvar = IO.iodata_to_binary(current_var)
-    cval = String.trim_trailing(IO.iodata_to_binary(current_value))
+    cvar = IO.chardata_to_string(current_var)
+    cval = String.trim_trailing(IO.chardata_to_string(current_value))
 
     ## TODO add checks on var name && and value, emit warnings if invalid;
 
@@ -989,12 +994,12 @@ defmodule CSSEx.Parser do
   # it to the correct ets slot
   def handle_event(
         :internal,
-        {:parse, <<?;, rem::binary>>},
+        {:parse, [?; | rem]},
         {:parse, :current_key},
         %{current_key: current_key} = data
       ) do
     current_key
-    |> IO.iodata_to_binary()
+    |> IO.chardata_to_string()
     |> String.split(":", parts: 2)
     |> case do
       [key, val] ->
@@ -1024,12 +1029,12 @@ defmodule CSSEx.Parser do
 
   def handle_event(
         :internal,
-        {:parse, <<?;, rem::binary>>},
+        {:parse, [?; | rem]},
         {:parse, :value, :current_value},
         %{current_key: current_key, current_value: current_value} = data
       ) do
-    ckey = IO.iodata_to_binary(current_key)
-    cval = String.trim_trailing(IO.iodata_to_binary(current_value))
+    ckey = IO.chardata_to_string(current_key)
+    cval = String.trim_trailing(IO.chardata_to_string(current_value))
 
     ## TODO add checks on attribute & value, emit warnings if invalid;
 
@@ -1051,7 +1056,7 @@ defmodule CSSEx.Parser do
         %{search_acc: acc} = data
       ) do
     new_data =
-      %{data | search_acc: ""}
+      %{data | search_acc: []}
       |> Map.put(type, [Map.fetch!(data, type), acc])
 
     {:next_state, next, new_data, [{:next_event, :internal, {:parse, rem}}]}
@@ -1063,7 +1068,7 @@ defmodule CSSEx.Parser do
         {:after_terminator, {:parse, :value, _type} = next},
         %{search_acc: acc, current_value: cval} = data
       ) do
-    new_data = %{data | search_acc: "", current_value: [cval, acc]}
+    new_data = %{data | search_acc: [], current_value: [cval, acc]}
 
     {:next_state, next, new_data, [{:next_event, :internal, {:parse, rem}}]}
   end
@@ -1071,7 +1076,7 @@ defmodule CSSEx.Parser do
   # we're accumulating on something, add the value to that type we're accumulating
   def handle_event(
         :internal,
-        {:parse, <<char, rem::binary>>},
+        {:parse, [char | rem]},
         {:parse, type},
         data
       ),
@@ -1083,7 +1088,7 @@ defmodule CSSEx.Parser do
   # @charset, cleanup and verify it's valid to add
   def handle_event(
         :internal,
-        {:parse, <<?;, rem::binary>>},
+        {:parse, [?; | rem]},
         {:parse, :value, :charset},
         data
       ) do
@@ -1101,7 +1106,7 @@ defmodule CSSEx.Parser do
   # cleanup and verify it's valid to add
   def handle_event(
         :internal,
-        {:parse, <<?;, rem::binary>>},
+        {:parse, [?; | rem]},
         {:parse, :value, :import},
         data
       ) do
@@ -1118,7 +1123,7 @@ defmodule CSSEx.Parser do
   # a valid char while we're accumulating for a value, add it and continue
   def handle_event(
         :internal,
-        {:parse, <<char, rem::binary>>},
+        {:parse, [char | rem]},
         {:parse, :value, _type},
         %{current_value: cval} = data
       ),
@@ -1181,8 +1186,8 @@ defmodule CSSEx.Parser do
     case maybe_replace_val(val, data) do
       {:ok, new_val} ->
         case :ets.lookup(ets, ffc) do
-          [{_, existing}] -> :ets.insert(ets, {ffc, [existing, key, ":", new_val, ";"]})
-          [] -> :ets.insert(ets, {ffc, [key, ":", new_val, ";"]})
+          [{_, existing}] -> :ets.insert(ets, {ffc, [existing, ";", key, ":", new_val]})
+          [] -> :ets.insert(ets, {ffc, [key, ":", new_val]})
         end
 
         data
@@ -1202,10 +1207,10 @@ defmodule CSSEx.Parser do
       {:ok, new_val} ->
         case :ets.lookup(ets, chain) do
           [{_, existing}] ->
-            :ets.insert(ets, {chain, [existing, key, ":", new_val, ";"]})
+            :ets.insert(ets, {chain, [existing, ";", key, ":", new_val]})
 
           [] ->
-            :ets.insert(ets, {chain, [key, ":", new_val, ";"]})
+            :ets.insert(ets, {chain, [key, ":", new_val]})
         end
 
         data
@@ -1220,7 +1225,7 @@ defmodule CSSEx.Parser do
 
   # add the current_selector to the current_chain
   def add_current_selector(%{current_key: cs} = data) do
-    current_selector = String.trim(IO.iodata_to_binary(cs))
+    current_selector = String.trim(IO.chardata_to_string(cs))
 
     case maybe_replace_val(current_selector, data) do
       {:ok, replaced_selector} ->
@@ -1235,13 +1240,13 @@ defmodule CSSEx.Parser do
   def reset_current(data),
     do: %{
       data
-      | current_key: "",
-        current_value: "",
-        current_var: "",
-        current_assign: "",
+      | current_key: [],
+        current_value: [],
+        current_var: [],
+        current_assign: [],
         current_scope: nil,
         current_add_var: false,
-        current_function: ""
+        current_function: []
     }
 
   # TODO when tightening the scopes this has to take into account creating a variable in a given selector, right now it will crash when variables that create css vars (@*) are declared inside elements
@@ -1296,7 +1301,7 @@ defmodule CSSEx.Parser do
   def validate_charset(%{current_value: charset, charset: nil, first_rule: true} = data) do
     new_charset =
       charset
-      |> IO.iodata_to_binary()
+      |> IO.chardata_to_string()
       |> String.trim(~s("))
 
     %{data | charset: ~s("#{new_charset}")}
@@ -1331,7 +1336,7 @@ defmodule CSSEx.Parser do
   def validate_import(%{current_value: current_value, first_rule: true, imports: imports} = data) do
     {:ok, cval} =
       current_value
-      |> IO.iodata_to_binary()
+      |> IO.chardata_to_string()
       |> String.trim()
       |> maybe_replace_val(data)
 
@@ -1422,7 +1427,6 @@ defmodule CSSEx.Parser do
   def fold_attributes_table(ets) do
     :ets.foldl(
       fn {selector, attributes}, acc ->
-        # [acc, Enum.join(selector, " "), "{", attributes, "}"]
         [acc, selector, "{", attributes, "}"]
       end,
       [],
@@ -1450,8 +1454,9 @@ defmodule CSSEx.Parser do
       ) do
     parsed =
       current_value
-      |> IO.iodata_to_binary()
+      |> IO.chardata_to_string()
       |> String.trim()
+      |> to_charlist()
 
     {parsed_2, data} = CSSEx.Helpers.Media.parse(parsed, data)
 
@@ -1475,7 +1480,7 @@ defmodule CSSEx.Parser do
                       :ets.insert(original_ets, {selector, attributes})
 
                     [{_, existing}] ->
-                      :ets.insert(original_ets, {selector, [existing | attributes]})
+                      :ets.insert(original_ets, {selector, [existing, ";" | attributes]})
                   end
                 end,
                 :ok,
@@ -1500,7 +1505,7 @@ defmodule CSSEx.Parser do
         %{ets_keyframes: original_ets, current_value: current_value} = data,
         %{ets: inner_ets} = _new_inner_data
       ) do
-    parsed = IO.iodata_to_binary(current_value)
+    parsed = IO.chardata_to_string(current_value)
 
     case maybe_replace_val(parsed, data) do
       {:ok, cval} ->
@@ -1577,11 +1582,13 @@ defmodule CSSEx.Parser do
         data,
         %{current_value: current_value, media_parent: media_parent} = _parent_data
       ) do
-    parsed = IO.iodata_to_binary(current_value)
-    {parsed_2, data} = CSSEx.Helpers.Media.parse(parsed, data)
+    {parsed_2, data} = CSSEx.Helpers.Media.parse(:lists.flatten(current_value), data)
 
     new_media_parent =
-      [media_parent, parsed_2]
+      [
+        media_parent,
+        IO.chardata_to_string(parsed_2)
+      ]
       |> Enum.map(fn element -> String.trim(element) end)
       |> Enum.join(" ")
       |> String.trim()

@@ -11,20 +11,21 @@ defmodule CSSEx.Helpers.Media do
     end
   end
 
-  def do_parse(<<>>, data, %{acc: acc, parenthesis: 0} = _state) do
-    parsed = IO.iodata_to_binary(acc)
+  def do_parse([], data, %{acc: acc, parenthesis: 0} = _state) do
+    parsed = IO.chardata_to_string(acc)
+
     {:ok, {parsed, data}}
   end
 
   # we found an opening parenthesis (,
-  def do_parse(<<40, rem::binary>>, data, %{parenthesis: p, p_acc: p_acc} = state) do
+  def do_parse([?( | rem], data, %{parenthesis: p, p_acc: p_acc} = state) do
     new_p = p + 1
     new_p_acc = Map.put(p_acc, new_p, [])
     do_parse(rem, inc_col(data), %{state | parenthesis: new_p, p_acc: new_p_acc})
   end
 
   # we found a closing parenthesis )
-  def do_parse(<<41, rem::binary>>, data, %{acc: acc, parenthesis: p, p_acc: p_acc} = state)
+  def do_parse([?) | rem], data, %{acc: acc, parenthesis: p, p_acc: p_acc} = state)
       when p > 0 do
     {accumulator, new_p_acc} = Map.pop(p_acc, p)
     processed = process_parenthesis_content(accumulator, data)
@@ -35,12 +36,12 @@ defmodule CSSEx.Helpers.Media do
       case Map.pop(new_p_acc, previous_p) do
         # this means we're on the first opened parenthesis
         {nil, new_p_acc_2} ->
-          %{new_state | p_acc: new_p_acc_2, acc: [acc | ["(", processed, ")"]]}
+          %{new_state | p_acc: new_p_acc_2, acc: [acc, [?(, processed, ?)]]}
 
         {previous_acc, new_p_acc_2} ->
           %{
             new_state
-            | p_acc: Map.put(new_p_acc_2, previous_p, [previous_acc | ["(", processed, ")"]])
+            | p_acc: Map.put(new_p_acc_2, previous_p, [previous_acc, [?(, processed, ?)]])
           }
       end
 
@@ -48,28 +49,28 @@ defmodule CSSEx.Helpers.Media do
   end
 
   Enum.each(@line_terminators, fn char ->
-    def do_parse(<<unquote(char), _rem::binary>>, _data, _state), do: {:error, :newline}
+    def do_parse([unquote(char) | _rem], _data, _state), do: {:error, :newline}
   end)
 
   def do_parse(
-        <<char::binary-size(1), rem::binary>>,
+        [char | rem],
         data,
         %{parenthesis: p, p_acc: p_acc} = state
       )
       when p > 0 do
     p_acc_inner = Map.fetch!(p_acc, p)
-    new_p_acc = Map.put(p_acc, p, [p_acc_inner | char])
+    new_p_acc = Map.put(p_acc, p, [p_acc_inner, char])
     do_parse(rem, data, inc_col(%{state | p_acc: new_p_acc}))
   end
 
-  def do_parse(<<char::binary-size(1), rem::binary>>, data, %{parenthesis: 0, acc: acc} = state),
-    do: do_parse(rem, data, inc_col(%{state | acc: [acc | char]}))
+  def do_parse([char | rem], data, %{parenthesis: 0, acc: acc} = state),
+    do: do_parse(rem, data, inc_col(%{state | acc: [acc, char]}))
 
-  def do_parse(<<41, _rem::binary>>, data, %{parenthesis: 0}),
+  def do_parse([?), _rem], data, %{parenthesis: 0}),
     do: {:error, %{data | valid?: false, error: "Unexpected closing parenthesis"}}
 
   def process_parenthesis_content(accumulator, data) do
-    acc = IO.iodata_to_binary(accumulator)
+    acc = IO.chardata_to_string(accumulator)
 
     Regex.split(~r/\s(and|or)\s/, acc, include_captures: true)
     |> Enum.map(fn value ->

@@ -28,7 +28,7 @@ defmodule CSSEx.Function.Test do
     assert {
              :ok,
              _,
-             ".test{color:hsla(0,100%,60%,1.0);color:hsla(300,7%,15%,1.0);}\n"
+             ".test{color:hsla(0,100%,60%,1.0);color:hsla(300,7%,15%,1.0)}\n"
            } = Parser.parse(@basic)
   end
 
@@ -36,7 +36,7 @@ defmodule CSSEx.Function.Test do
     assert {
              :ok,
              _,
-             "div{color:hsla(0,100%,60%,1.0);}\n"
+             "div{color:hsla(0,100%,60%,1.0)}\n"
            } =
              Parser.parse("""
              @!test @fn::lighten(red, 10);
@@ -48,7 +48,7 @@ defmodule CSSEx.Function.Test do
     assert {
              :ok,
              _,
-             "div{color:hsla(0,100%,40%,1.0);}\n"
+             "div{color:hsla(0,100%,40%,1.0)}\n"
            } =
              Parser.parse("""
              @!test @fn::darken(red, 10);
@@ -60,7 +60,7 @@ defmodule CSSEx.Function.Test do
     assert {
              :ok,
              _,
-             "div{color:rgba(255,0,0,0.6);}\n"
+             "div{color:rgba(255,0,0,0.6)}\n"
            } =
              Parser.parse("""
              @!test @fn::opacity(red, 0.6);
@@ -76,5 +76,20 @@ defmodule CSSEx.Function.Test do
              """)
 
     assert error =~ "function call opacity threw an exception"
+  end
+
+  test "arguments with commas in them are parsed correctly" do
+    assert {
+             :ok,
+             _,
+             "div{color:rgba(255,0,0,0.6)}\n"
+           } =
+             Parser.parse("""
+             @fn test(color) ->
+             "color: \#{color}";
+             end;
+
+             div { @fn::test(rgba(255,0,0,0.6))}
+             """)
   end
 end

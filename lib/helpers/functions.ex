@@ -1,7 +1,5 @@
 defmodule CSSEx.Helpers.Functions do
-
   def lighten(_ctx_content, color, percentage) do
-
     {
       :ok,
       %CSSEx.HSLA{l: %CSSEx.Unit{value: l} = l_unit} = hsla
@@ -21,7 +19,6 @@ defmodule CSSEx.Helpers.Functions do
   end
 
   def darken(_ctx_content, color, percentage) do
-
     {
       :ok,
       %CSSEx.HSLA{l: %CSSEx.Unit{value: l} = l_unit} = hsla
@@ -40,7 +37,7 @@ defmodule CSSEx.Helpers.Functions do
     |> to_string
   end
 
-  def opacity(_ctx_content, color, alpha) do
+  def opacity(ctx_content, color, alpha) do
     {:ok, %CSSEx.RGBA{} = rgba} = CSSEx.RGBA.new_rgba(color)
 
     {parsed_alpha, _} = Float.parse(alpha)
@@ -53,6 +50,6 @@ defmodule CSSEx.Helpers.Functions do
       end
 
     %CSSEx.RGBA{rgba | a: n_alpha}
-    |> to_string
+    |> to_string()
   end
 end

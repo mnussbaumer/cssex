@@ -67,7 +67,7 @@ defmodule CSSEx.Task.Test do
              Mix.Tasks.Cssex.Parser.run(["--c", "cssex"])
            end) =~ "PROCESSED :: #{base_path} into \"#{dest_path}"
 
-    assert {:ok, "div.test{color:red;}\n"} = File.read(dest_path)
+    assert {:ok, "div.test{color:red}\n"} = File.read(dest_path)
   end
 
   test "processing with flag --c and multiple entry points works", %{
@@ -87,8 +87,8 @@ defmodule CSSEx.Task.Test do
     assert capture =~ "PROCESSED :: #{base_path} into \"#{dest_path}"
     assert capture =~ "PROCESSED :: #{base_path_2} into \"#{dest_path_2}"
 
-    assert {:ok, "div.test{color:red;}\n"} = File.read(dest_path)
-    assert {:ok, "div.test{color:blue;}\n"} = File.read(dest_path_2)
+    assert {:ok, "div.test{color:red}\n"} = File.read(dest_path)
+    assert {:ok, "div.test{color:blue}\n"} = File.read(dest_path_2)
   end
 
   test "processing with flag --c and multiple entry points, one of which bad, exits with error",
@@ -116,8 +116,8 @@ defmodule CSSEx.Task.Test do
     assert capture =~ "ERROR :: \"\\\"unable to find file"
     assert capture =~ @no_bueno_path
 
-    assert {:ok, "div.test{color:red;}\n"} = File.read(dest_path)
-    assert {:ok, "div.test{color:blue;}\n"} = File.read(dest_path_2)
+    assert {:ok, "div.test{color:red}\n"} = File.read(dest_path)
+    assert {:ok, "div.test{color:blue}\n"} = File.read(dest_path_2)
   end
 
   test "processing with flag --e works", %{base_path: base_path, dest_path: dest_path} do
@@ -125,7 +125,7 @@ defmodule CSSEx.Task.Test do
              Mix.Tasks.Cssex.Parser.run(["--e", "#{base_path}=#{dest_path}"])
            end) =~ "PROCESSED :: #{base_path} into \"#{dest_path}"
 
-    assert {:ok, "div.test{color:red;}\n"} = File.read(dest_path)
+    assert {:ok, "div.test{color:red}\n"} = File.read(dest_path)
   end
 
   test "processing with flag --e and --a works", %{
@@ -138,7 +138,7 @@ defmodule CSSEx.Task.Test do
              Mix.Tasks.Cssex.Parser.run(["--e", "#{base_without}=#{dest_without}", "--a", "cssex"])
            end) =~ "PROCESSED :: #{base_path} into \"#{dest_path}"
 
-    assert {:ok, "div.test{color:red;}\n"} = File.read(dest_path)
+    assert {:ok, "div.test{color:red}\n"} = File.read(dest_path)
   end
 
   test "processing with flag --e and only origin path works", %{
@@ -149,7 +149,7 @@ defmodule CSSEx.Task.Test do
              Mix.Tasks.Cssex.Parser.run(["--e", "#{base_path}"])
            end) =~ "PROCESSED :: #{base_path} into \"#{dest_path}"
 
-    assert {:ok, "div.test{color:red;}\n"} = File.read(dest_path)
+    assert {:ok, "div.test{color:red}\n"} = File.read(dest_path)
   end
 
   test "processing with flag --e and --a and only origin path works", %{
@@ -161,7 +161,7 @@ defmodule CSSEx.Task.Test do
              Mix.Tasks.Cssex.Parser.run(["--e", "#{base_without}", "--a", "cssex"])
            end) =~ "PROCESSED :: #{base_path} into \"#{dest_path}"
 
-    assert {:ok, "div.test{color:red;}\n"} = File.read(dest_path)
+    assert {:ok, "div.test{color:red}\n"} = File.read(dest_path)
   end
 
   test "errors out with invalid paths" do

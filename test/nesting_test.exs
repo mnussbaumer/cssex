@@ -37,24 +37,24 @@ defmodule CSSEx.Nesting.Test do
 
     assert {:ok, _, parsed} = Parser.parse(css)
 
-    assert parsed =~ ".div_1{color:red;}"
-    assert parsed =~ ".div_1 .div_1_b,.div_1 .div_1_a{color:blue;}"
-    assert parsed =~ ".div_1.div_2_a{width:100%;padding:5px;}"
-    assert parsed =~ ".div_1.div_2_a.div_2_a_a,.div_1 .div_2_b.div_2_a_a{height:100%;}"
-    assert parsed =~ ".div_1.div_2_a.div_2_a_a .inner-inner{display:block;}"
-    assert parsed =~ ".div_1.div_3_b,.div_1 .div_1_a{margin:10px;}"
+    assert parsed =~ ".div_1{color:red}"
+    assert parsed =~ ".div_1 .div_1_b,.div_1 .div_1_a{color:blue}"
+    assert parsed =~ ".div_1.div_2_a{width:100%;padding:5px}"
+    assert parsed =~ ".div_1.div_2_a.div_2_a_a,.div_1 .div_2_b.div_2_a_a{height:100%}"
+    assert parsed =~ ".div_1.div_2_a.div_2_a_a .inner-inner{display:block}"
+    assert parsed =~ ".div_1.div_3_b,.div_1 .div_1_a{margin:10px}"
 
-    assert parsed =~ ".box-1, .box-2, .box-3{color:magenta;}"
+    assert parsed =~ ".box-1, .box-2, .box-3{color:magenta}"
 
     assert parsed =~
-             ".box-3 .box-5,.box-3.box-4,.box-2 .box-5,.box-2.box-4,.box-1 .box-5,.box-1.box-4{height:50px;}"
+             ".box-3 .box-5,.box-3.box-4,.box-2 .box-5,.box-2.box-4,.box-1 .box-5,.box-1.box-4{height:50px}"
   end
 
   test "html tags nestings when parent is also an html tag" do
     assert {
              :ok,
              _,
-             "div p.test.test-inner{color:red;}\n"
+             "div p.test.test-inner{color:red}\n"
            } =
              Parser.parse("""
              div {
@@ -71,7 +71,7 @@ defmodule CSSEx.Nesting.Test do
     assert {
              :ok,
              _,
-             "div p.test-parent .test{color:red;}\n"
+             "div p.test-parent .test{color:red}\n"
            } =
              Parser.parse("""
              div {
@@ -88,7 +88,7 @@ defmodule CSSEx.Nesting.Test do
     assert {
              :ok,
              _,
-             "div :not(.test.test-parent){color:red;}div .test :is(.other){color:blue;}\n"
+             "div :not(.test.test-parent){color:red}div .test :is(.other){color:blue}\n"
            } =
              Parser.parse("""
              div {

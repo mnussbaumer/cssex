@@ -1,25 +1,226 @@
 @include ./_variables.cssex;
 @include ./_functions.cssex;
 
-<%= for {name, color} <- @color_map, reduce: "" do
+<%= for {name, {color, inverse, _}} <- @color_map, reduce: [] do
   acc ->
-    acc <> """
+    ["""
     @*!#{name} #{color};
-    """
+    @*!#{name}_inverse #{inverse};
+    """ | acc]
 end %>
 
-<%= for {k, v} <- @sizes_map, reduce: "" do
+<%= for {k, v} <- @sizes_map, reduce: [] do
   acc ->
-    acc <> """
+    ["""
     .btn-#{k} {
       font-size: #{v["font-size"]}px;
       line-height: #{v["line-height"]}px;
       height: #{v["btn-height"]}px;
       min-height: #{v["btn-height"]}px;
     }
-    """
+    """ | acc]
 end %>
 
-.test {
-  @fn::reset_border()
+<%= for {name, {color, inverse, {c_dir, i_dir}}} <- @color_map, reduce: [] do
+  acc ->
+    hover_perc = 20;
+
+    ["""
+    .btn-#{name} {
+      border-color: @fn::opacity(#{color}, 0.8);
+      background-color: #{color};
+      color: #{inverse};
+      &:hover {
+        border-color: @fn::darken_or_lighten(#{c_dir}, #{color}, #{hover_perc});
+	background-color: @fn::darken_or_lighten(#{c_dir}, #{color}, #{hover_perc});
+	color: @fn::darken_or_lighten(#{i_dir}, #{color}, #{hover_perc});
+      }
+    }
+
+    .border-#{name} {
+      border-color: #{color};
+      border-width: 1px;
+      border-style: solid;
+    }
+
+    .color-#{name} {
+      color: #{color};
+      &.btn-clear:hover { 
+        color: @fn::darken_or_lighten(#{c_dir}, #{color}, 30);
+      }
+
+      &svg { 
+        fill: #{color};
+      }
+
+      &a {
+        &:hover {
+	  color: @fn::darken_or_lighten(#{c_dir}, #{color}, 30);
+	}
+      }
+    }
+
+    .bg-#{name} {
+      background-color: #{color};
+    }
+    
+    .clickable-#{name} {
+      border: 1px solid @fn::darken_or_lighten(#{c_dir}, #{color}, 10);
+      background-color: #{color};			 
+      &:hover {
+        border-color: 1px solid @fn::darken_or_lighten(#{c_dir}, #{color}, #{hover_perc});
+        background-color: @fn::darken_or_lighten(#{c_dir}, #{color}, 10);
+      }
+    }
+
+    .inherit-color-#{name} {
+      .inherit-color {
+        color: #{color};
+      }
+    }
+
+    .link-#{name} {
+      color: #{color};
+      cursor: pointer;
+      &:hover {
+        text-decoration: none;
+        color: @fn::darken_or_lighten(#{c_dir}, #{color}, 10);
+      }    		   
+    }
+    """ | acc]
+end %>
+
+.t-left { text-align: left; }
+.t-center { text-align: center; }
+.t-right { text-align: right; }
+.t-justify { text-align: justify; }
+.t-capitalize { text-transform: capitalize; }
+.t-uppercase { text-transform: uppercase; }
+.t-downcase { text-transform: downcase; }
+.t-small-caps { font-variant: small-caps; }
+.t-bold { font-weight: bold; }
+
+.link {
+      color: var(--primary);
+      cursor: pointer;
+      &:hover {
+	  text-decoration: none;
+	  color: @fn::darken(<$primary$>, 10);
+      }
 }
+
+
+
+<%= for size <- [100, 200, 300, 400, 500, 600, 700, 800], reduce: [] do
+acc ->
+  [".fw-#{size} { font-weight: #{size}; }" | acc]
+end %>
+
+
+<%= for n_1 <- 0..9, reduce: [] do
+acc_o ->				 
+  (for n_2 <- 0..9, rem(n_2, 5) == 0, reduce: acc_o do
+    acc	->			
+      ["""
+      .fx-#{n_1}-#{n_2}, .children-fx-#{n_1}-#{n_2} > * {
+        flex: #{Float.round(n_1 + (n_2 * 0.1), 1)};
+      }
+
+      .fx-#{n_1}#{n_2}, .children-fx-#{n_1}#{n_2} > * {
+        @fn::enforce_size(width, #{n_1}#{n_2}%)
+	flex: 1;
+      }
+      """ | [(
+	for {bp, width} <- @screen_breakpoints, reduce: [] do
+          acc_i ->
+	    ["""
+	    @fn::breakpoint_max(#{bp}, %::screen_breakpoints,
+	      .#{bp}:fx-#{n_1}-#{n_2}, .#{bp}:children-fx-#{n_1}-#{n_2} > * {
+	        flex: #{Float.round(n_1 + (n_2 * 0.1), 1)};
+	      }
+	      .#{bp}:fx-#{n_1}#{n_2}, .#{bp}:children-fx-#{n_1}#{n_2} > * {
+	        @fn::enforce_size(width, #{n_1}#{n_2}%)
+		flex: 1;
+	      }
+	    )
+	    """	| acc_i]					  
+        end
+     ) | acc]]
+  end)
+end %>
+
+.fx-100, .children-fx-100 > * {
+    @fn::enforce_size(width, 100%)
+}
+
+<%= for {bp, width} <- @screen_breakpoints, reduce: [] do
+acc ->
+  ["""						       
+   @fn::breakpoint_max(#{bp}, %::screen_breakpoints,
+     .#{bp}:fx-100, .#{bp}:children-fx-100 > * {
+       @fn::enforce_size(width, 100%)
+     }
+   )  	 
+  """ | acc]						       
+end %>
+
+<%= for n_1 <- 0..10, reduce: [] do
+acc_o ->
+
+  [(for {side, short} <- @sides, reduce: [] do
+        acc ->						   
+	
+	  ["""
+      	  .m#{short}-#{n_1}, .children-m#{short}-#{n_1} > * {
+	    margin-#{side}: #{round(n_1 * 10)}px;
+	  }
+
+	  .p#{short}-#{n_1}, .children-p#{short}-#{n_1} > * {
+	    padding-#{side}: #{round(n_1 * 10)}px;
+	  }
+          """, (
+            for {bp, width} <- @screen_breakpoints, reduce: [] do
+               acc_bp ->
+	         ["""
+		 @fn::breakpoint_max(bp, %::screen_breakpoints, 
+		   .#{bp}:m#{short}-#{n_1}, .#{bp}:children-m#{short}-#{n_1} > * {
+		     margin-#{side}: #{round(n_1 * 10)}px !important;
+		   }
+
+		   .#{bp}:p#{short}-#{n_1}, .#{bp}:children-p#{short}-#{n_1} > * {
+		     padding-#{side}: #{round(n_1 * 10)}px !important;
+		   }
+		 )
+		 """ | acc_bp]
+	    end
+	 ) | acc]
+     end) | ["""
+     .mx-#{n_1}, .children-mx-#{n_1} {
+       margin-left: #{round(n_1 * 10)}px;
+       margin-right: #{round(n_1 * 10)}px;
+     }
+
+     .my-#{n_1}, .children-my-#{n_1} {
+       margin-top: #{round(n_1 * 10)}px;
+       margin-bottom: #{round(n_1 * 10)}px;
+     }
+
+     .m-#{n_1}, .children-m-#{n_1} {
+       margin: #{round(n_1 * 10)}px;
+     }
+
+     .px-#{n_1}, .children-px-#{n_1} {
+       padding-left: #{round(n_1 * 10)}px;
+       padding-right: #{round(n_1 * 10)}px;
+     }
+
+     .py-#{n_1}, .children-py-#{n_1} {
+       padding-top: #{round(n_1 * 10)}px;
+       padding-bottom: #{round(n_1 * 10)}px;
+     }
+
+     .p-#{n_1}, .children-p-#{n_1} {
+       padding: #{round(n_1 * 10)}px;
+     }
+     """ | acc_o]]				       
+end %>
