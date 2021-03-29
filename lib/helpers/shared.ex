@@ -121,13 +121,13 @@ defmodule CSSEx.Helpers.Shared do
   def ampersand_join([], acc), do: :lists.flatten(acc)
 
   Enum.each(@appendable_first_char, fn char ->
-    def is_trail_concat(<<unquote(char), _::binary>>), do: true
+    def is_trail_concat(<<unquote(char)::utf8, _::binary>>), do: true
   end)
 
   def is_trail_concat(_), do: false
 
   Enum.each(@appendable_first_char, fn char ->
-    def is_lead_concat(<<unquote(char), _::binary>>), do: true
+    def is_lead_concat(<<unquote(char)::utf8, _::binary>>), do: true
   end)
 
   def is_lead_concat(_), do: false
@@ -243,4 +243,13 @@ defmodule CSSEx.Helpers.Shared do
   def search_args_split([char | rem], n, levels, acc, full_acc) do
     search_args_split(rem, n, levels, [acc, char], full_acc)
   end
+
+  def valid_attribute_kv?(key, val)
+      when is_binary(key) and
+             is_binary(val) and
+             byte_size(key) > 0 and
+             byte_size(val) > 0,
+      do: true
+
+  def valid_attribute_kv?(_, _), do: false
 end

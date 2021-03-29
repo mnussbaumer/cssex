@@ -6,7 +6,7 @@ defmodule CSSEx.Parser do
   import CSSEx.Helpers.Error, only: [error_msg: 1]
 
   alias CSSEx.Helpers.Shared, as: HShared
-
+  alias CSSEx.Helpers.Output
   @behaviour :gen_statem
 
   @timeout 15_000
@@ -29,6 +29,7 @@ defmodule CSSEx.Parser do
     :column,
     :error,
     :answer_to,
+    :to_file,
     current_reg: [],
     base_path: nil,
     file: nil,
@@ -86,14 +87,16 @@ defmodule CSSEx.Parser do
   """
   @spec parse_file(path :: String.t(), file_path :: String.t()) ::
           {:ok, %__MODULE__{}, String.t()} | {:error, term}
-  def parse_file(base_path, file_path) do
+  def parse_file(data \\ nil, base_path, file_path, parse_to_file \\ nil)
+
+  def parse_file(nil, base_path, file_path, parse_to_file) do
     {:ok, pid} = __MODULE__.start_link()
-    :gen_statem.call(pid, {:start_file, base_path, file_path})
+    :gen_statem.call(pid, {:start_file, base_path, file_path, parse_to_file})
   end
 
-  def parse_file(%__MODULE__{} = data, base_path, file_path) do
+  def parse_file(%__MODULE__{} = data, base_path, file_path, parse_to_file) do
     {:ok, pid} = __MODULE__.start_link(data)
-    :gen_statem.call(pid, {:start_file, base_path, file_path})
+    :gen_statem.call(pid, {:start_file, base_path, file_path, parse_to_file})
   end
 
   @doc """
@@ -104,20 +107,22 @@ defmodule CSSEx.Parser do
   Again, a predefined %__MODULE__{} struct can be passed as the first argument to
   force the parser to operate from that, including adding assigns or scope.
   """
-  def parse(content) when is_binary(content),
-    do: parse(to_charlist(content))
+  def parse(data \\ nil, content, parse_to_file \\ nil)
 
-  def parse(content) do
+  def parse(nil, content, parse_to_file) when is_binary(content),
+    do: parse(nil, to_charlist(content), parse_to_file)
+
+  def parse(nil, content, parse_to_file) do
     {:ok, pid} = __MODULE__.start_link()
-    :gen_statem.call(pid, {:start, content})
+    :gen_statem.call(pid, {:start, content, parse_to_file})
   end
 
-  def parse(%__MODULE__{} = data, content) when is_binary(content),
-    do: parse(data, to_charlist(content))
+  def parse(%__MODULE__{} = data, content, parse_to_file) when is_binary(content),
+    do: parse(data, to_charlist(content), parse_to_file)
 
-  def parse(%__MODULE__{} = data, content) do
+  def parse(%__MODULE__{} = data, content, parse_to_file) do
     {:ok, pid} = __MODULE__.start_link(data)
-    :gen_statem.call(pid, {:start, content})
+    :gen_statem.call(pid, {:start, content, parse_to_file})
   end
 
   @impl :gen_statem
@@ -153,14 +158,14 @@ defmodule CSSEx.Parser do
   end
 
   @impl :gen_statem
-  def handle_event({:call, from}, {:start, content}, :waiting, data) do
-    new_data = %__MODULE__{data | answer_to: from}
+  def handle_event({:call, from}, {:start, content, parse_to_file}, :waiting, data) do
+    new_data = %__MODULE__{data | answer_to: from, to_file: parse_to_file}
     {:next_state, {:parse, :next}, new_data, [{:next_event, :internal, {:parse, content}}]}
   end
 
   def handle_event(
         {:call, from},
-        {:start_file, base_path, file_path},
+        {:start_file, base_path, file_path, parse_to_file},
         :waiting,
         %{file_list: file_list} = data
       ) do
@@ -185,7 +190,8 @@ defmodule CSSEx.Parser do
               | answer_to: from,
                 file: path,
                 file_list: [path | file_list],
-                base_path: base_path
+                base_path: base_path,
+                to_file: parse_to_file
             }
 
             {:next_state, {:parse, :next}, new_data,
@@ -1185,12 +1191,18 @@ defmodule CSSEx.Parser do
       ) do
     case maybe_replace_val(val, data) do
       {:ok, new_val} ->
-        case :ets.lookup(ets, ffc) do
-          [{_, existing}] -> :ets.insert(ets, {ffc, [existing, ";", key, ":", new_val]})
-          [] -> :ets.insert(ets, {ffc, [key, ":", new_val]})
-        end
+        case HShared.valid_attribute_kv?(key, new_val) do
+          true ->
+            case :ets.lookup(ets, ffc) do
+              [{_, existing}] -> :ets.insert(ets, {ffc, [existing, ";", key, ":", new_val]})
+              [] -> :ets.insert(ets, {ffc, [key, ":", new_val]})
+            end
 
-        data
+            data
+
+          false ->
+            add_error(data, error_msg({:invalid_declaration, key, new_val}))
+        end
 
       {:error, {:not_declared, _, _} = error} ->
         add_error(data, error_msg(error))
@@ -1205,15 +1217,21 @@ defmodule CSSEx.Parser do
       ) do
     case maybe_replace_val(val, data) do
       {:ok, new_val} ->
-        case :ets.lookup(ets, chain) do
-          [{_, existing}] ->
-            :ets.insert(ets, {chain, [existing, ";", key, ":", new_val]})
+        case HShared.valid_attribute_kv?(key, new_val) do
+          true ->
+            case :ets.lookup(ets, chain) do
+              [{_, existing}] ->
+                :ets.insert(ets, {chain, [existing, ";", key, ":", new_val]})
 
-          [] ->
-            :ets.insert(ets, {chain, [key, ":", new_val]})
+              [] ->
+                :ets.insert(ets, {chain, [key, ":", new_val]})
+            end
+
+            data
+
+          false ->
+            add_error(data, error_msg({:invalid_declaration, key, new_val}))
         end
-
-        data
 
       {:error, {:not_declared, _, _} = error} ->
         add_error(data, error_msg(error))
@@ -1368,14 +1386,20 @@ defmodule CSSEx.Parser do
     }
 
   # reply back according to the level
-  def reply_finish(%{answer_to: from, ets: ets, level: 0} = data) do
-    css = fold_attributes_table(ets)
-    final_css = add_last_special_attributes(data, css)
+  def reply_finish(%{answer_to: from, level: 0} = data) do
+    reply =
+      case Output.do_finish(data) do
+        {:ok, %Output{acc: final_css}} ->
+          {:ok, data, final_css}
+
+        {:error, %Output{data: data}} ->
+          {:error, data}
+      end
 
     {
       :stop_and_reply,
       :normal,
-      [{:reply, from, {:ok, data, IO.iodata_to_binary([final_css, "\n"])}}]
+      [{:reply, from, reply}]
     }
   end
 
@@ -1385,63 +1409,6 @@ defmodule CSSEx.Parser do
       :normal,
       [{:reply, from, {:finished, data}}]
     }
-  end
-
-  @doc """
-  Adds special rules like @charset to the stylesheet iodata_list, since those have
-  to be in the beginning of the file to not be ignored by browser parsers. 
-  """
-  def add_last_special_attributes(data, iodata) do
-    iodata
-    |> maybe_add_font_faces(data)
-    |> maybe_add_imports(data)
-    |> maybe_add_charset(data)
-    |> maybe_add_media(data)
-    |> maybe_add_keyframes(data)
-  end
-
-  def maybe_add_font_faces(iodata, %{ets_fontface: ets}) do
-    css = fold_font_faces_table(ets)
-    [css | iodata]
-  end
-
-  def maybe_add_charset(iodata, %{charset: charset}) when is_binary(charset),
-    do: ["@charset #{charset};", iodata]
-
-  def maybe_add_charset(iodata, _), do: iodata
-
-  def maybe_add_imports(iodata, %{imports: imports}),
-    do: [imports | iodata]
-
-  def maybe_add_media(iodata, %{media: media}) do
-    Enum.reduce(media, iodata, fn {media_rule, ets_table}, acc ->
-      [acc, media_rule, "{", fold_attributes_table(ets_table), "}"]
-    end)
-  end
-
-  def maybe_add_keyframes(iodata, %{ets_keyframes: ets}) do
-    css = fold_attributes_table(ets)
-    [iodata | css]
-  end
-
-  def fold_attributes_table(ets) do
-    :ets.foldl(
-      fn {selector, attributes}, acc ->
-        [acc, selector, "{", attributes, "}"]
-      end,
-      [],
-      ets
-    )
-  end
-
-  def fold_font_faces_table(ets) do
-    :ets.foldl(
-      fn {_, attributes}, acc ->
-        [acc, "@font-face{", attributes, "}"]
-      end,
-      [],
-      ets
-    )
   end
 
   @doc """
@@ -1510,7 +1477,7 @@ defmodule CSSEx.Parser do
     case maybe_replace_val(parsed, data) do
       {:ok, cval} ->
         full_path = ["@keyframes ", String.trim(cval)]
-        folded_css = fold_attributes_table(inner_ets)
+        folded_css = Output.fold_attributes_table(inner_ets)
 
         case :ets.lookup(original_ets, full_path) do
           [] -> :ets.insert(original_ets, {full_path, folded_css})

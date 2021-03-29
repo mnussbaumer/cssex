@@ -97,10 +97,12 @@ defmodule CSSEx do
     self_pid = self()
 
     new_monitors =
-      Enum.reduce(entries, %{}, fn {path, _final}, monitors_acc ->
+      Enum.reduce(entries, %{}, fn {path, final}, monitors_acc ->
         case File.exists?(path) do
           true ->
-            {_pid, monitor} = Process.spawn(__MODULE__, :parse_file, [path, self_pid], [:monitor])
+            {_pid, monitor} =
+              Process.spawn(__MODULE__, :parse_file, [path, final, self_pid], [:monitor])
+
             Map.put(monitors_acc, monitor, path)
 
           false ->
@@ -113,10 +115,17 @@ defmodule CSSEx do
      [{:next_event, :internal, :set_status}, @timeout]}
   end
 
-  def handle_event(:internal, {:process, file_path}, _, %{monitors: monitors} = data) do
+  def handle_event(
+        :internal,
+        {:process, file_path},
+        _,
+        %{entry_points: entries, monitors: monitors} = data
+      ) do
     self_pid = self()
+    final_file = Map.get(entries, file_path)
 
-    {_pid, monitor} = Process.spawn(__MODULE__, :parse_file, [file_path, self_pid], [:monitor])
+    {_pid, monitor} =
+      Process.spawn(__MODULE__, :parse_file, [file_path, final_file, self_pid], [:monitor])
 
     new_monitors = Map.put(monitors, monitor, file_path)
 
@@ -124,44 +133,21 @@ defmodule CSSEx do
      [{:next_event, :internal, :set_status}, @timeout]}
   end
 
-  def handle_event(:internal, {:post_process, parser, file_contents}, _, _data) do
+  def handle_event(:internal, {:post_process, parser}, _, _data) do
     case parser do
       %CSSEx.Parser{valid?: true, warnings: [], file: file} ->
-        {:keep_state_and_data, [{:next_event, :internal, {:save_file, file, file_contents}}]}
+        {:keep_state_and_data, []}
 
       %CSSEx.Parser{valid?: true, warnings: warnings, file: file} ->
         Enum.each(warnings, fn warning ->
           Logger.warn(warning)
         end)
 
-        {:keep_state_and_data, [{:next_event, :internal, {:save_file, file, file_contents}}]}
+        {:keep_state_and_data, []}
 
       %CSSEx.Parser{valid?: false, error: error} ->
         Logger.error(error)
         {:keep_state_and_data, []}
-    end
-  end
-
-  def handle_event(:internal, {:save_file, file, file_contents}, _, %{entry_points: eps} = _data) do
-    final_path = Map.get(eps, file)
-
-    case File.mkdir_p(Path.dirname(final_path)) do
-      :ok ->
-        case File.write(final_path, file_contents, [:write]) do
-          :ok ->
-            {:keep_state_and_data, []}
-
-          {:error, error} ->
-            Logger.error("Error writing #{file} CSSEx output to #{final_path} ::: #{error}")
-            {:keep_state_and_data}
-        end
-
-      {:error, error} ->
-        Logger.error(
-          "Error creating directories for #{file} CSSEx output to #{final_path} ::: #{error}"
-        )
-
-        {:keep_state_and_data}
     end
   end
 
@@ -209,20 +195,16 @@ defmodule CSSEx do
 
   def handle_event(:info, {:parsed, parsed}, _, data) do
     case parsed do
-      {:ok, %CSSEx.Parser{dependencies: dependencies, file: original_file} = parser,
-       file_contents} ->
+      {:ok, %CSSEx.Parser{dependencies: deps, file: original_file} = parser, _} ->
         new_data =
           data
-          |> add_dependencies(original_file, dependencies)
+          |> add_dependencies(original_file, deps)
           |> synch_watchers()
 
-        {:keep_state, new_data,
-         [{:next_event, :internal, {:post_process, parser, file_contents}}]}
+        {:keep_state, new_data, [{:next_event, :internal, {:post_process, parser}}]}
 
-      {:error, %CSSEx.Parser{error: error, file: original_file} = cssex} ->
-        Logger.error("CSSEx Watcher ERROR parsing: #{original_file} :: \n\n #{error}")
-        Logger.error("#{inspect(cssex)}")
-        {:keep_state_and_data, []}
+      {:error, %CSSEx.Parser{error: error, file: original_file} = parser} ->
+        {:keep_state_and_data, [{:next_event, :internal, {:post_process, parser}}]}
     end
   end
 
@@ -311,8 +293,8 @@ defmodule CSSEx do
     %{data | watchers: new_watchers}
   end
 
-  def parse_file(path, self_pid) do
-    result = CSSEx.Parser.parse_file(Path.dirname(path), Path.basename(path))
+  def parse_file(path, final_file, self_pid) do
+    result = CSSEx.Parser.parse_file(nil, Path.dirname(path), Path.basename(path), final_file)
     send(self_pid, {:parsed, result})
   end
 
