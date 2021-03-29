@@ -32,6 +32,12 @@ defmodule CSSEx.File.Test do
     non_existing_path = Path.join([cwd, "test", "files", "non_existing"])
     assert {:ok, _} = File.rm_rf(non_existing_path)
 
+    on_exit(fn ->
+      assert {:ok, _} = File.rm_rf(final_base)
+      assert {:ok, _} = File.rm_rf(target_originals)
+      assert {:ok, _} = File.rm_rf(target_originals_relative)
+    end)
+
     {:ok, %{target_originals: target_originals, non_existing: non_existing_path}}
   end
 
