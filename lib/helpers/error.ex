@@ -13,7 +13,6 @@ defmodule CSSEx.Helpers.Error do
 
   def error_msg({:assigns, error}), do: "evaluating assignment: #{inspect(error)}"
 
-
   def error_msg({:cyclic_reference, path, _file_list}),
     do: "cyclic reference, #{path} won't be able to be parsed"
 
@@ -39,4 +38,7 @@ defmodule CSSEx.Helpers.Error do
 
   def error_msg({:invalid_parent_concat, to_concat}),
     do: "you're tring to concat #{to_concat} outside of a block"
+
+  def error_msg({:invalid_declaration, key, val}),
+    do: "invalid declaration of css rule where key -> #{key} <- and value -> #{val} <-"
 end

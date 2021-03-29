@@ -95,7 +95,12 @@ defmodule Mix.Tasks.Cssex.Parser do
 
         Task.async(fn ->
           result =
-            CSSEx.Parser.parse_file(Path.dirname(expanded_base), Path.basename(expanded_base))
+            CSSEx.Parser.parse_file(
+              nil,
+              Path.dirname(expanded_base),
+              Path.basename(expanded_base),
+              expanded_final
+            )
 
           {result, expanded_base, expanded_final}
         end)
@@ -103,9 +108,9 @@ defmodule Mix.Tasks.Cssex.Parser do
 
     processed = Task.yield_many(tasks, 60_000)
 
-    Enum.map(processed, fn
-      {_, {:ok, {{:ok, %{valid?: true}, content}, base, final}}} ->
-        try_write(base, final, content)
+    Enum.each(processed, fn
+      {_, {:ok, {{:ok, %{valid?: true}, _}, base, final}}} ->
+        ok(base, final)
 
       {_, {:ok, {{:error, %{error: error}}, _, _}}} ->
         error(error)
@@ -123,18 +128,6 @@ defmodule Mix.Tasks.Cssex.Parser do
          end) do
       true -> :ok
       _ -> exit({:shutdown, 1})
-    end
-  end
-
-  defp try_write(base, path, content) do
-    with(
-      :ok <- File.mkdir_p(Path.dirname(path)),
-      :ok <- File.write(path, content, [:write])
-    ) do
-      ok(base, path)
-    else
-      error ->
-        error(error)
     end
   end
 

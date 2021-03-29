@@ -18,7 +18,6 @@ defmodule CSSEx.Helpers.EEX do
 
   def finish(rem, %{line: line} = data, %{acc: eex_block} = state) do
     acc = IO.chardata_to_string(eex_block)
-    # TODO final might return an error which makes for less helpful error msg
     final = eval_with_bindings(acc, data)
     line_correction = calc_line_offset(state, final)
 
@@ -26,9 +25,7 @@ defmodule CSSEx.Helpers.EEX do
     :erlang.garbage_collect()
     {:ok, {new_final, %{close_current(data) | line: line + line_correction}}}
   rescue
-    error ->
-      IO.inspect(error)
-      {:error, add_error(data, error_msg({:eex, error}))}
+    error -> {:error, add_error(data, error_msg({:eex, error}))}
   end
 
   def do_parse([], data, %{column: col, line: line}) do

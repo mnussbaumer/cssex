@@ -28,7 +28,5 @@ defmodule CSSEx.Include.Test do
     final_file: final_file
   } do
     assert {:ok, _, result} = Parser.parse_file(base_path, original_file)
-
-    # IO.inspect(result, limit: :infinity, printable_limit: :infinity)
   end
 end

@@ -109,4 +109,16 @@ defmodule CSSEx.Error.Test do
 
     assert error =~ "\"you're tring to concat p.test outside of a block\" :: l:2 c:3"
   end
+
+  test "invalid key val declarations" do
+    assert {:error, %Parser{error: error}} = Parser.parse("div{color:}")
+
+    assert error =~
+             "invalid declaration of css rule where key -> color <- and value ->  <-\" :: l:1 c:4"
+
+    assert {:error, %Parser{error: error}} = Parser.parse("div{:color:}")
+
+    assert error =~
+             "invalid declaration of css rule where key ->  <- and value -> color: <-\" :: l:1 c:4"
+  end
 end
