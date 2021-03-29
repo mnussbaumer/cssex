@@ -6,7 +6,7 @@ defmodule CSSEx.Comments.Test do
     assert {
              :ok,
              _,
-             "div.test{color:blue}div.test.another-one{color:black;font-family:sans-serif}div .test{color:green}div{color:red}\n"
+             "div{color:red}div.test{color:blue}div.test.another-one{color:black;font-family:sans-serif}div .test{color:green}\n"
            } =
              Parser.parse("""
              @!width: 567px; // comment 0
@@ -32,7 +32,7 @@ defmodule CSSEx.Comments.Test do
     assert {
              :ok,
              _,
-             "div.test{color:blue}div.test.another-one{color:black;font-family:sans-serif}div .test{color:green}div{color:red}\n"
+             "div{color:red}div.test{color:blue}div.test.another-one{color:black;font-family:sans-serif}div .test{color:green}\n"
            } =
              Parser.parse("""
              @!width: 567px; /* comment 0

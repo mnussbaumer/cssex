@@ -209,7 +209,7 @@ defmodule CSSEx do
   end
 
   def handle_event(:info, {:file_event, _worker_pid, {file_path, events}}, _, data) do
-    case :modified in events do
+    case :modified in events and :closed in events do
       false ->
         {:keep_state_and_data, []}
 

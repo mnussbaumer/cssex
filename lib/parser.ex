@@ -62,7 +62,9 @@ defmodule CSSEx.Parser do
     font_face_count: 0,
     imports: [],
     dependencies: [],
-    search_acc: []
+    search_acc: [],
+    order_map: %{c: 0},
+    keyframes_order_map: %{c: 0}
   ]
 
   @white_space CSSEx.Helpers.WhiteSpace.code_points()
@@ -846,7 +848,7 @@ defmodule CSSEx.Parser do
         data
       ) do
     inner_data =
-      data
+      %{data | order_map: %{c: 0}}
       |> create_data_for_inner(false, nil)
       |> add_media_parent(data)
 
@@ -1219,15 +1221,7 @@ defmodule CSSEx.Parser do
       {:ok, new_val} ->
         case HShared.valid_attribute_kv?(key, new_val) do
           true ->
-            case :ets.lookup(ets, chain) do
-              [{_, existing}] ->
-                :ets.insert(ets, {chain, [existing, ";", key, ":", new_val]})
-
-              [] ->
-                :ets.insert(ets, {chain, [key, ":", new_val]})
-            end
-
-            data
+            Output.write_element(data, key, new_val)
 
           false ->
             add_error(data, error_msg({:invalid_declaration, key, new_val}))
@@ -1302,13 +1296,23 @@ defmodule CSSEx.Parser do
     end
   end
 
-  def add_css_var(%{ets: ets} = data, cc, to_add) do
-    case :ets.lookup(ets, cc) do
-      [{_, existing}] -> :ets.insert(ets, {cc, [existing | to_add]})
-      [] -> :ets.insert(ets, {cc, to_add})
-    end
+  def add_css_var(%{ets: ets, order_map: %{c: c} = om} = data, cc, to_add) do
+    new_om =
+      case :ets.lookup(ets, cc) do
+        [{_, existing}] ->
+          :ets.insert(ets, {cc, [existing | to_add]})
+          om
 
-    data
+        [] ->
+          :ets.insert(ets, {cc, to_add})
+
+          om
+          |> Map.put(:c, c + 1)
+          |> Map.put(cc, c)
+          |> Map.put(c, cc)
+      end
+
+    %{data | order_map: new_om}
   end
 
   @doc """
@@ -1417,7 +1421,7 @@ defmodule CSSEx.Parser do
   """
   def add_media_query(
         %{current_value: current_value, media_parent: media_p} = data,
-        %{ets: inner_ets, media: media}
+        %{ets: inner_ets, media: media, order_map: om}
       ) do
     parsed =
       current_value
@@ -1437,25 +1441,12 @@ defmodule CSSEx.Parser do
         new_media =
           case Map.get(media, media_query) do
             nil ->
-              Map.put(media, media_query, inner_ets)
+              Map.put(media, media_query, {inner_ets, om})
 
-            original_ets ->
-              :ets.foldl(
-                fn {selector, attributes}, _acc ->
-                  case :ets.lookup(original_ets, selector) do
-                    [] ->
-                      :ets.insert(original_ets, {selector, attributes})
-
-                    [{_, existing}] ->
-                      :ets.insert(original_ets, {selector, [existing, ";" | attributes]})
-                  end
-                end,
-                :ok,
-                inner_ets
-              )
-
+            {original_ets, existing_om} ->
+              new_om = Output.write_media(inner_ets, original_ets, existing_om)
               :ets.delete(inner_ets)
-              media
+              Map.put(media, media_query, {original_ets, new_om})
           end
 
         %{data | media: new_media}
@@ -1478,14 +1469,9 @@ defmodule CSSEx.Parser do
       {:ok, cval} ->
         full_path = ["@keyframes ", String.trim(cval)]
         folded_css = Output.fold_attributes_table(inner_ets)
-
-        case :ets.lookup(original_ets, full_path) do
-          [] -> :ets.insert(original_ets, {full_path, folded_css})
-          [{_, existing}] -> :ets.insert(original_ets, {full_path, [existing | folded_css]})
-        end
-
+        new_data = Output.write_keyframe(data, full_path, folded_css)
         :ets.delete(inner_ets)
-        data
+        new_data
 
       {:error, {:not_declared, _, _} = error} ->
         add_error(data, error_msg(error))
@@ -1507,7 +1493,9 @@ defmodule CSSEx.Parser do
           functions: functions,
           media: media,
           media_parent: media_parent,
-          source_pid: source_pid
+          source_pid: source_pid,
+          order_map: order_map,
+          keyframes_order_map: keyframe_order_map
         } = data,
         ets \\ nil,
         prefix \\ nil
@@ -1541,7 +1529,9 @@ defmodule CSSEx.Parser do
       split_chain: inner_split_chain,
       media: media,
       source_pid: source_pid,
-      media_parent: media_parent
+      media_parent: media_parent,
+      order_map: order_map,
+      keyframes_order_map: keyframe_order_map
     }
   end
 
@@ -1579,7 +1569,9 @@ defmodule CSSEx.Parser do
           valid?: valid?,
           font_face_count: ffc,
           error: error,
-          functions: functions
+          functions: functions,
+          order_map: om,
+          keyframes_order_map: kom
         }
       ) do
     %__MODULE__{
@@ -1591,7 +1583,9 @@ defmodule CSSEx.Parser do
         assigns: Map.merge(existing_assigns, assigns),
         functions: Map.merge(existing_functions, functions),
         error: error,
-        media: media
+        media: media,
+        order_map: om,
+        keyframes_order_map: kom
     }
   end
 
