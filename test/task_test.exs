@@ -42,6 +42,12 @@ defmodule CSSEx.Task.Test do
     entry_points_1 = [{base_without_cwd, dest_without_cwd}]
     entry_points_2 = [{base_2_without_cwd, dest_2_without_cwd} | entry_points_1]
 
+    on_exit(fn ->
+      assert {:ok, _} = File.rm_rf(dest_path)
+      assert {:ok, _} = File.rm_rf(dest_path_2)
+      assert {:ok, _} = File.rm_rf(dest_same_path)
+    end)
+
     {:ok,
      %{
        base_path: base_path,

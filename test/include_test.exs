@@ -13,11 +13,10 @@ defmodule CSSEx.Include.Test do
     original_file = Path.join([root, "simples.cssex"])
     final_file = Path.join([final_base, "simples.css"])
 
-    assert {:ok, _} = File.rm_rf(final_base)
-    refute File.exists?(final_base)
-
     assert :ok = File.mkdir(final_base)
     assert File.exists?(final_base)
+
+    on_exit(fn -> assert {:ok, _} = File.rm_rf(final_base) end)
 
     {:ok, %{base_path: root, original_file: original_file, final_file: final_file}}
   end
