@@ -23,9 +23,8 @@ defmodule CSSEx.Include.Test do
 
   test "parsing simples", %{
     base_path: base_path,
-    original_file: original_file,
-    final_file: final_file
+    original_file: original_file
   } do
-    assert {:ok, _, result} = Parser.parse_file(base_path, original_file)
+    assert {:ok, _, _result} = Parser.parse_file(base_path, original_file)
   end
 end

@@ -22,6 +22,23 @@ defmodule Mix.Tasks.Cssex.Parser do
 
   --c myapp_web
   """
+
+  @doc """
+  Run the parser with `mix cssex.parser`
+  Required arguments:
+
+  --e /source/path.cssex=/final/path.css
+  --e /source/path.cssex
+  --e source/path.cssex=final/path.css --a yourapp_web
+  --e source/path.cssex --a yourapp_web
+
+  Or
+
+  --c yourapp_web
+
+  Where `yourapp_web` specifies a config under the key CSSEx, with a key of :entry_points composed of tuple pairs of source & destination files.
+
+  """
   def run([]),
     do:
       error(

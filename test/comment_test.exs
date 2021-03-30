@@ -9,7 +9,7 @@ defmodule CSSEx.Comments.Test do
              "div{color:red}div.test{color:blue}div.test.another-one{color:black;font-family:sans-serif}div .test{color:green}\n"
            } =
              Parser.parse("""
-             @!width: 567px; // comment 0
+             $!width: 567px; // comment 0
              // comment 1
              div{
                color: red;
@@ -35,7 +35,7 @@ defmodule CSSEx.Comments.Test do
              "div{color:red}div.test{color:blue}div.test.another-one{color:black;font-family:sans-serif}div .test{color:green}\n"
            } =
              Parser.parse("""
-             @!width: 567px; /* comment 0
+             $!width: 567px; /* comment 0
              // comment 1
              */
              div{

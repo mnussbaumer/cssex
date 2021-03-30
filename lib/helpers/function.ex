@@ -1,4 +1,6 @@
 defmodule CSSEx.Helpers.Function do
+  @moduledoc false
+
   import CSSEx.Helpers.Shared, only: [inc_col: 1, inc_col: 2, inc_line: 1]
   import CSSEx.Parser, only: [add_error: 2]
   import CSSEx.Helpers.Error, only: [error_msg: 1]
@@ -20,6 +22,7 @@ defmodule CSSEx.Helpers.Function do
           "fn(",
           Enum.join(["ctx_content" | args], ","),
           ") -> ",
+          "\nif(ctx_content, do: true, else: false)\n",
           fun_string,
           " end"
         ])
@@ -82,7 +85,7 @@ defmodule CSSEx.Helpers.Function do
       [_, name] ->
         case functions do
           nil -> {name, []}
-          funs -> {name, [nil]}
+          _funs -> {name, [nil]}
         end
 
       _ ->

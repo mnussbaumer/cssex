@@ -1,7 +1,5 @@
 defmodule CSSEx.Helpers.Assigns do
-  @moduledoc """
-  Helpers for parsing a CSSEx assign, given it can be any elixir term/expression to be evaluated it has different rules and should keep all characters until the termination mark, afterwards it should be validated and return either an updated {rem, %CSSEx.Parser{valid?: true}} or {rem, %CSSEx.Parser{valid?: false}} with the error field populated.
-  """
+  @moduledoc false
 
   import CSSEx.Parser, only: [close_current: 1, add_error: 1, add_error: 2]
   import CSSEx.Helpers.Shared, only: [inc_col: 1, inc_line: 1]

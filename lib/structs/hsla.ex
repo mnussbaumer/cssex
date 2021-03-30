@@ -82,7 +82,7 @@ defmodule CSSEx.HSLA do
         {same, same, same} -> 0
         {n_r, n_g, n_b} when n_r > n_g and n_r > n_b -> (n_g - n_b) / (max - min)
         {n_r, n_g, n_b} when n_g > n_r and n_g > n_b -> 2 + (n_b - n_r) / (max - min)
-        {n_r, n_g, n_b} -> 4 + (n_r - n_g) / (max - min)
+        {n_r, n_g, _n_b} -> 4 + (n_r - n_g) / (max - min)
       end
 
     hue_2 =
@@ -151,10 +151,10 @@ defmodule CSSEx.HSLA do
   def valid_hue_val(n), do: %Unit{value: 0, unit: nil}
 
   def valid_saturation_val(n) when n <= 100 and n >= 0, do: %Unit{value: n, unit: "%"}
-  def valid_saturation_val(n), do: %Unit{value: 0, unit: "%"}
+  def valid_saturation_val(_n), do: %Unit{value: 0, unit: "%"}
 
   def valid_luminance_val(n) when n <= 100 and n >= 0, do: %Unit{value: n, unit: "%"}
-  def valid_luminance_val(n), do: %Unit{value: 0, unit: "%"}
+  def valid_luminance_val(_n), do: %Unit{value: 0, unit: "%"}
 
   def valid_alpha_val(n) when n > 0 and n <= 1, do: n
   def valid_alpha_val(_n), do: 1

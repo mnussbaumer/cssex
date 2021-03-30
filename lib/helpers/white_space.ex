@@ -1,9 +1,8 @@
 defmodule CSSEx.Helpers.WhiteSpace do
-  @moduledoc """
-  Helpers for matching on white space characters according to Unicode Pattern_White_Space. The chars we match are those mentioned in the wikipedia page except the line terminators that are in the helpers for them since we want to be able to discern line and column when parsing the cssex files
-  https://en.wikipedia.org/wiki/Whitespace_character#Unicode
+  @moduledoc false
 
-  """
+  # https://en.wikipedia.org/wiki/Whitespace_character#Unicode
+
   @white_space_unicode [
                          "\u0009",
                          "\u0020",

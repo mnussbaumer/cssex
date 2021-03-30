@@ -1,4 +1,4 @@
-%!screen_breakpoints [
+@!screen_breakpoints [
   sm: "0px",
   md: "768px",
   lg: "992px",
@@ -6,7 +6,7 @@
   xxl: "1440px",
 ];
 
-%!sizes %{
+@!sizes %{
   sm: 12,
   md: 18,
   lg: 24,
@@ -14,25 +14,25 @@
   xxl: 40
 };
 
-%!sizes_props %{
+@!sizes_props %{
   "font-size" => fn(x) -> x end,
   "line-height" => fn(x) -> x end,
   "btn-height" => fn(x) -> Float.round(x * 1.6, 1) end
 };
 
-%!sizes_map for {k, v} <- sizes, reduce: %{} do
+@!sizes_map for {k, v} <- sizes, reduce: %{} do
   acc ->
     Map.put(acc, k, Enum.reduce(sizes_props, %{}, fn({k, fun}, acc_inner) -> Map.put(acc_inner, k, fun.(v)) end))
 end;
 
-%!sides %{left: "l", top: "t", right: "r", bottom: "b"};
+@!sides %{left: "l", top: "t", right: "r", bottom: "b"};
 
 
 /* it reads as {color, inverse, {direction, direction}}, where direction is true or false and means, 
 if it's to darken (true) or lighten (false) the color when applying hover effects and such
 */
 
-%!color_map %{
+@!color_map %{
     white: {"white", "black", {true, false}},
     black: {"black", "white", {false, true}},
     text:  {"#152734", "white", {false, true}},

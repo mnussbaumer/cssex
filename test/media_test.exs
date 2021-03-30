@@ -32,9 +32,9 @@ defmodule CSSEx.Media.Test do
     assert {:ok, _,
             "@media print and (max-width:565px and min-width:300px), (min-width:565px){.test{color:blue}}\n"} =
              Parser.parse("""
-             @!max-width 565px;
+             $!max-width 565px;
              .test {
-               @media print and (max-width: @$$max-width and min-width: 300px), (min-width: @$$max-width) {
+               @media print and (max-width: $::max-width and min-width: 300px), (min-width: $::max-width) {
                  color: blue;
                }
              }
@@ -45,8 +45,8 @@ defmodule CSSEx.Media.Test do
     assert {:ok, _,
             "@media print and (max-width:565px){.test{color:red}}@media print and (max-width:565px) and (min-width:300px){.test.inner{color:blue}.test{color:orange}}\n"} =
              Parser.parse("""
-             @!color orange;
-             @!min_width 300px;
+             $!color orange;
+             $!min_width 300px;
              @media print and (max-width: 565px) {
                .test { color: red;
              	@media and (min-width: <$min_width$>) {

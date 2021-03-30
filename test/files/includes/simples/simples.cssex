@@ -3,15 +3,18 @@
 
 <%= for {name, {color, inverse, _}} <- @color_map, reduce: [] do
   acc ->
-    ["""
-    @*!#{name} #{color};
-    @*!#{name}_inverse #{inverse};
-    """ | acc]
+  [
+    """
+    $*!#{name} #{color};
+    $*!#{name}_inverse #{inverse};
+    """ | acc
+  ]
 end %>
 
 <%= for {k, v} <- @sizes_map, reduce: [] do
   acc ->
-    ["""
+    [
+    """
     .btn-#{k} {
       font-size: #{v["font-size"]}px;
       line-height: #{v["line-height"]}px;
@@ -25,15 +28,16 @@ end %>
   acc ->
     hover_perc = 20;
 
-    ["""
+    [
+    """
     .btn-#{name} {
       border-color: @fn::opacity(#{color}, 0.8);
       background-color: #{color};
       color: #{inverse};
       &:hover {
         border-color: @fn::darken_or_lighten(#{c_dir}, #{color}, #{hover_perc});
-	background-color: @fn::darken_or_lighten(#{c_dir}, #{color}, #{hover_perc});
-	color: @fn::darken_or_lighten(#{i_dir}, #{color}, #{hover_perc});
+    	background-color: @fn::darken_or_lighten(#{c_dir}, #{color}, #{hover_perc});
+    	color: @fn::darken_or_lighten(#{i_dir}, #{color}, #{hover_perc});
       }
     }
 
@@ -55,8 +59,8 @@ end %>
 
       &a {
         &:hover {
-	  color: @fn::darken_or_lighten(#{c_dir}, #{color}, 30);
-	}
+    	  color: @fn::darken_or_lighten(#{c_dir}, #{color}, 30);
+    	}
       }
     }
 
@@ -121,29 +125,31 @@ end %>
 acc_o ->				 
   (for n_2 <- 0..9, rem(n_2, 5) == 0, reduce: acc_o do
     acc	->			
-      ["""
-      .fx-#{n_1}-#{n_2}, .children-fx-#{n_1}-#{n_2} > * {
+	 [
+    """
+    .fx-#{n_1}-#{n_2}, .children-fx-#{n_1}-#{n_2} > * {
+      flex: #{Float.round(n_1 + (n_2 * 0.1), 1)};
+    }
+
+    .fx-#{n_1}#{n_2}, .children-fx-#{n_1}#{n_2} > * {
+      @fn::enforce_size(width, #{n_1}#{n_2}%)
+      flex: 1;
+    }
+    """ | [(
+	for {bp, _width} <- @screen_breakpoints, reduce: [] do
+          acc_i ->
+	      [
+    """
+    @fn::breakpoint_max(#{bp}, @::screen_breakpoints,
+      .#{bp}\:fx-#{n_1}-#{n_2}, .#{bp}\:children-fx-#{n_1}-#{n_2} > * {
         flex: #{Float.round(n_1 + (n_2 * 0.1), 1)};
       }
-
-      .fx-#{n_1}#{n_2}, .children-fx-#{n_1}#{n_2} > * {
+      .#{bp}\:fx-#{n_1}#{n_2}, .#{bp}\:children-fx-#{n_1}#{n_2} > * {
         @fn::enforce_size(width, #{n_1}#{n_2}%)
-	flex: 1;
+      	flex: 1;
       }
-      """ | [(
-	for {bp, width} <- @screen_breakpoints, reduce: [] do
-          acc_i ->
-	    ["""
-	    @fn::breakpoint_max(#{bp}, %::screen_breakpoints,
-	      .#{bp}\:fx-#{n_1}-#{n_2}, .#{bp}\:children-fx-#{n_1}-#{n_2} > * {
-	        flex: #{Float.round(n_1 + (n_2 * 0.1), 1)};
-	      }
-	      .#{bp}\:fx-#{n_1}#{n_2}, .#{bp}\:children-fx-#{n_1}#{n_2} > * {
-	        @fn::enforce_size(width, #{n_1}#{n_2}%)
-		flex: 1;
-	      }
-	    )
-	    """	| acc_i]					  
+    )
+    """	| acc_i]					  
         end
      ) | acc]]
   end)
@@ -153,15 +159,16 @@ end %>
     @fn::enforce_size(width, 100%)
 }
 
-<%= for {bp, width} <- @screen_breakpoints, reduce: [] do
+<%= for {bp, _width} <- @screen_breakpoints, reduce: [] do
 acc ->
-  ["""						       
-   @fn::breakpoint_max(#{bp}, %::screen_breakpoints,
-     .#{bp}\:fx-100, .#{bp}\:children-fx-100 > * {
-       @fn::enforce_size(width, 100%)
-     }
-   )  	 
-  """ | acc]						       
+    [
+    """						       
+    @fn::breakpoint_max(#{bp}, @::screen_breakpoints,
+      .#{bp}\:fx-100, .#{bp}\:children-fx-100 > * {
+        @fn::enforce_size(width, 100%)
+      }
+    )	 
+    """ | acc]						       
 end %>
 
 <%= for n_1 <- 0..10, reduce: [] do
@@ -170,70 +177,74 @@ acc_o ->
   [(for {side, short} <- @sides, reduce: [] do
         acc ->						   
 	
-	  ["""
-      	  .m#{short}-#{n_1}, .children-m#{short}-#{n_1} > * {
-	    margin-#{side}: #{round(n_1 * 10)}px;
-	  }
+	  [
+    """
+    .m#{short}-#{n_1}, .children-m#{short}-#{n_1} > * {
+      margin-#{side}: #{round(n_1 * 10)}px;
+    }
 
-	  .p#{short}-#{n_1}, .children-p#{short}-#{n_1} > * {
-	    padding-#{side}: #{round(n_1 * 10)}px;
-	  }
-          """, (
-            for {bp, width} <- @screen_breakpoints, reduce: [] do
-               acc_bp ->
-	         ["""
-		 @fn::breakpoint_max(bp, %::screen_breakpoints, 
-		   .#{bp}\:m#{short}-#{n_1}, .#{bp}\:children-m#{short}-#{n_1} > * {
-		     margin-#{side}: #{round(n_1 * 10)}px !important;
-		   }
+    .p#{short}-#{n_1}, .children-p#{short}-#{n_1} > * {
+      padding-#{side}: #{round(n_1 * 10)}px;
+    }
+    """, (
+      for {bp, _width} <- @screen_breakpoints, reduce: [] do
+        acc_bp ->
+	  [
+    """
+    @fn::breakpoint_max(bp, @::screen_breakpoints, 
+      .#{bp}\:m#{short}-#{n_1}, .#{bp}\:children-m#{short}-#{n_1} > * {
+        margin-#{side}: #{round(n_1 * 10)}px !important;
+      }
+    
+      .#{bp}\:p#{short}-#{n_1}, .#{bp}\:children-p#{short}-#{n_1} > * {
+        padding-#{side}: #{round(n_1 * 10)}px !important;
+      }
+    )
+    """ | acc_bp]
+      end
+    ) | acc]
+    end) | [
+    """
+    .mx-#{n_1}, .children-mx-#{n_1} {
+      margin-left: #{round(n_1 * 10)}px;
+      margin-right: #{round(n_1 * 10)}px;
+    }
 
-		   .#{bp}\:p#{short}-#{n_1}, .#{bp}\:children-p#{short}-#{n_1} > * {
-		     padding-#{side}: #{round(n_1 * 10)}px !important;
-		   }
-		 )
-		 """ | acc_bp]
-	    end
-	 ) | acc]
-     end) | ["""
-     .mx-#{n_1}, .children-mx-#{n_1} {
-       margin-left: #{round(n_1 * 10)}px;
-       margin-right: #{round(n_1 * 10)}px;
-     }
+    .my-#{n_1}, .children-my-#{n_1} {
+      margin-top: #{round(n_1 * 10)}px;
+      margin-bottom: #{round(n_1 * 10)}px;
+    }
 
-     .my-#{n_1}, .children-my-#{n_1} {
-       margin-top: #{round(n_1 * 10)}px;
-       margin-bottom: #{round(n_1 * 10)}px;
-     }
+    .m-#{n_1}, .children-m-#{n_1} {
+      margin: #{round(n_1 * 10)}px;
+    }
 
-     .m-#{n_1}, .children-m-#{n_1} {
-       margin: #{round(n_1 * 10)}px;
-     }
+    .px-#{n_1}, .children-px-#{n_1} {
+      padding-left: #{round(n_1 * 10)}px;
+      padding-right: #{round(n_1 * 10)}px;
+    }
 
-     .px-#{n_1}, .children-px-#{n_1} {
-       padding-left: #{round(n_1 * 10)}px;
-       padding-right: #{round(n_1 * 10)}px;
-     }
+    .py-#{n_1}, .children-py-#{n_1} {
+      padding-top: #{round(n_1 * 10)}px;
+      padding-bottom: #{round(n_1 * 10)}px;
+    }
 
-     .py-#{n_1}, .children-py-#{n_1} {
-       padding-top: #{round(n_1 * 10)}px;
-       padding-bottom: #{round(n_1 * 10)}px;
-     }
-
-     .p-#{n_1}, .children-p-#{n_1} {
-       padding: #{round(n_1 * 10)}px;
-     }
-     """ | acc_o]]				       
+    .p-#{n_1}, .children-p-#{n_1} {
+      padding: #{round(n_1 * 10)}px;
+    }
+    """ | acc_o]]				       
 end %>
 
-<%= for {bp, width} <- @screen_breakpoints, reduce: [] do
+<%= for {bp, _width} <- @screen_breakpoints, reduce: [] do
 acc ->
-  ["""
-   @fn::breakpoint_max(#{bp}, %::screen_breakpoints,
-     .#{bp}\:fx-100, .#{bp}\:children-fx-100 > * {
-       @fn::enforce_size(width, 100%)
-     }
-   )
-  """ | acc]						       
+    [
+    """
+    @fn::breakpoint_max(#{bp}, @::screen_breakpoints,
+      .#{bp}\:fx-100, .#{bp}\:children-fx-100 > * {
+        @fn::enforce_size(width, 100%)
+      }
+    )
+    """ | acc]						       
 end %>
 
 <%= for n_1 <- 0..10, reduce: [] do
@@ -241,45 +252,45 @@ acc_o ->
   for {bp, _width} <- @screen_breakpoints, reduce: acc_o do
     acc ->
     [
-	"""       
-        @fn::breakpoint_max(#{bp}, %::screen_breakpoints,
-          .#{bp}\:mx-#{n_1}, .#{bp}\:children-mx-#{n_1} > * {
-            margin-left: #{round(n_1 * 10)}px !important;
-            margin-right: #{round(n_1 * 10)}px !important;
-           }
-           .#{bp}\:my-#{n_1}, .#{bp}\:children-my-#{n_1} > * {
-              margin-top: #{round(n_1 * 10)}px !important;
-              margin-bottom: #{round(n_1 * 10)}px !important;
-           }
-           .#{bp}\:m-#{n_1}, .#{bp}\:children-m-#{n_1} > * {
-              margin: #{round(n_1 * 10)}px !important;
-           }
-           .#{bp}\:px-#{n_1}, .#{bp}\:children-px-#{n_1} > * {
-            padding-left: #{round(n_1 * 10)}px !important;
-            padding-right: #{round(n_1 * 10)}px !important;
-           }
-           .#{bp}\:py-#{n_1}, .#{bp}\:children-py-#{n_1} > * {
-              padding-top: #{round(n_1 * 10)}px !important;
-              padding-bottom: #{round(n_1 * 10)}px !important;
-           }
-           .#{bp}\:p-#{n_1}, .#{bp}\:children-p-#{n_1} > * {
-              padding: #{round(n_1 * 10)}px !important;
-           }
-           .#{bp}\:fx-row, .#{bp}\:children-fx-row > * {
-             display: flex !important;
-             flex-flow: row wrap !important;
-             width: 100% !important;
-           }
-           .#{bp}\:fx-nowrap, .#{bp}\:children-fx-nowrap > * {
-             flex-wrap: nowrap !important;
-           }
-           .#{bp}\:fx-column, .#{bp}\:children-fx-column > * {
-             display: flex !important;
-             flex-flow: column nowrap !important;
-             width: 100% !important;
-           }
-        )
-        """ | acc
+    """       
+    @fn::breakpoint_max(#{bp}, @::screen_breakpoints,
+      .#{bp}\:mx-#{n_1}, .#{bp}\:children-mx-#{n_1} > * {
+        margin-left: #{round(n_1 * 10)}px !important;
+        margin-right: #{round(n_1 * 10)}px !important;
+      }
+      .#{bp}\:my-#{n_1}, .#{bp}\:children-my-#{n_1} > * {
+        margin-top: #{round(n_1 * 10)}px !important;
+        margin-bottom: #{round(n_1 * 10)}px !important;
+      }
+      .#{bp}\:m-#{n_1}, .#{bp}\:children-m-#{n_1} > * {
+        margin: #{round(n_1 * 10)}px !important;
+      }
+      .#{bp}\:px-#{n_1}, .#{bp}\:children-px-#{n_1} > * {
+        padding-left: #{round(n_1 * 10)}px !important;
+        padding-right: #{round(n_1 * 10)}px !important;
+      }
+      .#{bp}\:py-#{n_1}, .#{bp}\:children-py-#{n_1} > * {
+        padding-top: #{round(n_1 * 10)}px !important;
+        padding-bottom: #{round(n_1 * 10)}px !important;
+      }
+      .#{bp}\:p-#{n_1}, .#{bp}\:children-p-#{n_1} > * {
+        padding: #{round(n_1 * 10)}px !important;
+      }
+      .#{bp}\:fx-row, .#{bp}\:children-fx-row > * {
+        display: flex !important;
+        flex-flow: row wrap !important;
+        width: 100% !important;
+      }
+      .#{bp}\:fx-nowrap, .#{bp}\:children-fx-nowrap > * {
+        flex-wrap: nowrap !important;
+      }
+      .#{bp}\:fx-column, .#{bp}\:children-fx-column > * {
+        display: flex !important;
+        flex-flow: column nowrap !important;
+        width: 100% !important;
+      }
+      )
+    """ | acc
     ]
     end
 end %>
@@ -354,17 +365,17 @@ end %>
 }
 
 
-<%= for {side, short} <- @sides, reduce: [] do
+<%= for {side, _short} <- @sides, reduce: [] do
  acc ->
    [
      """
      .text-#{side} { text-laign: #{side}; } 
      """
-     | (for {bp, width} <- @screen_breakpoints, reduce: acc do
+     | (for {bp, _width} <- @screen_breakpoints, reduce: acc do
           acc_bp ->
             [
               """
-              @fn::breakpoint_max(bp, %::screen_breakpoints, 
+              @fn::breakpoint_max(bp, @::screen_breakpoints, 
                 .#{bp}\:text-#{side} { text-align: #{side}; }
               )
               """ | acc_bp]
@@ -373,7 +384,7 @@ end %>
 end %>
 
 
-<%= for {bp, width} <- @screen_breakpoints, reduce: [] do
+<%= for {bp, _width} <- @screen_breakpoints, reduce: [] do
   acc ->
     [
 	"""

@@ -1,4 +1,6 @@
 defmodule CSSEx.Helpers.EEX do
+  @moduledoc false
+
   import CSSEx.Parser, only: [open_current: 2, close_current: 1, add_error: 2]
   import CSSEx.Helpers.Shared, only: [inc_col: 1, inc_col: 2, inc_line: 1, inc_line: 2]
   import CSSEx.Helpers.Error, only: [error_msg: 1]
@@ -88,7 +90,7 @@ defmodule CSSEx.Helpers.EEX do
     do: do_parse(rem, data, inc_col(%{state | acc: [acc, char]}))
 
   def replace_and_extract_assigns(acc, matches, %{assigns: assigns, local_assigns: local_assigns}) do
-    Enum.reduce_while(matches, {acc, []}, fn <<"%::", name::binary>> = full,
+    Enum.reduce_while(matches, {acc, []}, fn <<"@::", name::binary>> = full,
                                              {eex_block, bindings} ->
       case Map.get(local_assigns, name) || Map.get(assigns, name) do
         nil ->
@@ -97,7 +99,7 @@ defmodule CSSEx.Helpers.EEX do
         val ->
           {:cont,
            {
-             String.replace(eex_block, full, fn <<"%::", name::binary>> ->
+             String.replace(eex_block, full, fn <<"@::", name::binary>> ->
                <<"@", name::binary>>
              end),
              [{String.to_atom(name), val} | bindings]

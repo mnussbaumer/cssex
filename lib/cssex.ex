@@ -50,6 +50,28 @@ defmodule CSSEx do
     end)
   end
 
+  @doc """
+  Start a watcher responsible for automatically processing cssex files into css files.
+  Define in the application config something as:
+
+  ```
+  config :yourapp_web, CSSEx,
+    entry_points: [
+      {"../../../../apps/yourapp_web/assets/cssex/app.cssex", "../../../../apps/yourapp_web/assets/css/app.css"}
+  ]
+  ```
+
+  With as many entry_points as necessary.
+  Then,
+
+  ```
+  Application.get_env(:yourapp_web, CSSEx)
+  |> CSSEx.make_config(Application.app_dir(:your_app_web))
+  |> CSSEx.start_link()
+  ```
+
+  Or add it to a supervision tree. Refer to the README.md file.
+  """
   @spec start_link(%__MODULE__{}) :: {:ok, pid} | {:error, term}
   def start_link(%__MODULE__{} = config) do
     :gen_statem.start_link(__MODULE__, config, [])
@@ -135,10 +157,10 @@ defmodule CSSEx do
 
   def handle_event(:internal, {:post_process, parser}, _, _data) do
     case parser do
-      %CSSEx.Parser{valid?: true, warnings: [], file: file} ->
+      %CSSEx.Parser{valid?: true, warnings: []} ->
         {:keep_state_and_data, []}
 
-      %CSSEx.Parser{valid?: true, warnings: warnings, file: file} ->
+      %CSSEx.Parser{valid?: true, warnings: warnings} ->
         Enum.each(warnings, fn warning ->
           Logger.warn(warning)
         end)
@@ -203,7 +225,7 @@ defmodule CSSEx do
 
         {:keep_state, new_data, [{:next_event, :internal, {:post_process, parser}}]}
 
-      {:error, %CSSEx.Parser{error: error, file: original_file} = parser} ->
+      {:error, %CSSEx.Parser{} = parser} ->
         {:keep_state_and_data, [{:next_event, :internal, {:post_process, parser}}]}
     end
   end
@@ -248,6 +270,7 @@ defmodule CSSEx do
     end
   end
 
+  @doc false
   def add_dependencies(%{dependency_graph: dg} = data, file, dependencies) do
     new_dg =
       dependencies
@@ -260,6 +283,7 @@ defmodule CSSEx do
     %{data | dependency_graph: new_dg}
   end
 
+  @doc false
   def synch_watchers(%{dependency_graph: dg, watchers: watchers} = data) do
     unique_watch_paths =
       Enum.reduce(dg, [], fn {_k, v}, acc -> [v | acc] end)
@@ -293,11 +317,13 @@ defmodule CSSEx do
     %{data | watchers: new_watchers}
   end
 
+  @doc false
   def parse_file(path, final_file, self_pid) do
     result = CSSEx.Parser.parse_file(nil, Path.dirname(path), Path.basename(path), final_file)
     send(self_pid, {:parsed, result})
   end
 
+  @doc false
   # TODO check use cases with expand, perhaps it's not warranted?
   def assemble_path(<<"/", _::binary>> = path, _cwd), do: Path.expand(path)
 
