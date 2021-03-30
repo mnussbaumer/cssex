@@ -17,14 +17,15 @@ defmodule CSSEx do
   ]
 
   @type t :: %__MODULE__{
-          entry_points: Keyword.t() | Map.t(),
+          entry_points: list(Keyword.t()),
           pretty_print: boolean,
           file_watch: boolean,
           no_start: boolean
         }
 
   @doc """
-  Generate a %CSSEx{} struct from a keyword list or a map. Its only relevant use case is to "parse" app config environment values.
+  Generate a `%CSSEx{}` struct from a keyword list or a map. Its only relevant use case is to "parse" app config environment values. You can also pass a directory as the last argument where it will be joined to the paths in the `:entry_points`.
+  Whatever the final path it will be expanded when this config is passed as the argument to `start_link/1`
   """
   @spec make_config(Keyword.t() | Map.t(), base_dir :: String.t()) :: %__MODULE__{}
   def make_config(opts, dir \\ nil) when is_list(opts) do
@@ -61,7 +62,7 @@ defmodule CSSEx do
   ]
   ```
 
-  With as many entry_points as necessary.
+  With as many `:entry_points` as necessary specified as tuples of `{"source", "dest"}`
   Then,
 
   ```
@@ -157,7 +158,11 @@ defmodule CSSEx do
 
   def handle_event(:internal, {:post_process, parser}, _, _data) do
     case parser do
-      %CSSEx.Parser{valid?: true, warnings: []} ->
+      %CSSEx.Parser{valid?: true, warnings: [], file: file} ->
+        Logger.info(
+          IO.ANSI.green() <> "\nCSSEx PROCESSED file :: #{file}\n" <> IO.ANSI.default_color()
+        )
+
         {:keep_state_and_data, []}
 
       %CSSEx.Parser{valid?: true, warnings: warnings} ->
@@ -210,11 +215,41 @@ defmodule CSSEx do
     {:keep_state_and_data, events}
   end
 
-  def handle_event(:info, {:DOWN, ref, :process, _, _reason}, _, %{monitors: monitors} = data) do
-    {_, new_monitors} = Map.pop(monitors, ref)
-    {:keep_state, %{data | monitors: new_monitors}, [{:next_event, :internal, :set_status}]}
+  def handle_event(:info, {:DOWN, ref, :process, _, reason}, _, %{monitors: monitors} = data) do
+    {_path, new_monitors} = Map.pop(monitors, ref)
+
+    case reason do
+      %CSSEx.Parser{error: error, file_list: file_list, dependencies: deps, file: original_file} =
+          parser
+      when not is_nil(error) ->
+        new_data =
+          data
+          |> add_dependencies(original_file, :lists.flatten([file_list | deps]))
+          |> synch_watchers()
+
+        {:keep_state, new_data,
+         [
+           {:next_event, :internal, {:post_process, parser}},
+           {:next_event, :internal, :set_status}
+         ]}
+
+      _ ->
+        {:keep_state, %{data | monitors: new_monitors}, [{:next_event, :internal, :set_status}]}
+    end
   end
 
+  # TODO
+  # we should keep track of the deps in an additional way in order to have a full
+  # mapping of the files after a sucessful parse
+  # as it is it sets everything correctly but if one dependency is removed from the
+  # stylesheets the watchers will still be running for its directory - usually it
+  # won't be much of a problem since it gets reset whenever the server is started
+  # but ideally it would compare the previous dependencies with the new ones
+  # [old, ones] -- [new, ones]
+  # if it's different than [] it means those remaining can be removed
+  # to decide it just has to check if any current depedency overlaps with the same
+  # directory - if not then it's safe to turn off the watcher for that directory,
+  # if yes then we keep the watcher
   def handle_event(:info, {:parsed, parsed}, _, data) do
     case parsed do
       {:ok, %CSSEx.Parser{dependencies: deps, file: original_file} = parser, _} ->
@@ -225,13 +260,18 @@ defmodule CSSEx do
 
         {:keep_state, new_data, [{:next_event, :internal, {:post_process, parser}}]}
 
-      {:error, %CSSEx.Parser{} = parser} ->
-        {:keep_state_and_data, [{:next_event, :internal, {:post_process, parser}}]}
+      {:error, %CSSEx.Parser{dependencies: deps, file: original_file} = parser} ->
+        new_data =
+          data
+          |> add_dependencies(original_file, deps)
+          |> synch_watchers()
+
+        {:keep_state, new_data, [{:next_event, :internal, {:post_process, parser}}]}
     end
   end
 
   def handle_event(:info, {:file_event, _worker_pid, {file_path, events}}, _, data) do
-    case :modified in events and :closed in events do
+    case (:modified in events and :closed in events) or :closed in events do
       false ->
         {:keep_state_and_data, []}
 
@@ -286,7 +326,8 @@ defmodule CSSEx do
   @doc false
   def synch_watchers(%{dependency_graph: dg, watchers: watchers} = data) do
     unique_watch_paths =
-      Enum.reduce(dg, [], fn {_k, v}, acc -> [v | acc] end)
+      dg
+      |> Enum.reduce([], fn {k, v}, acc -> [k, v | acc] end)
       |> Enum.map(fn full_path -> Path.dirname(full_path) end)
       |> Enum.uniq()
 
@@ -320,13 +361,16 @@ defmodule CSSEx do
   @doc false
   def parse_file(path, final_file, self_pid) do
     result = CSSEx.Parser.parse_file(nil, Path.dirname(path), Path.basename(path), final_file)
+
     send(self_pid, {:parsed, result})
   end
 
   @doc false
   # TODO check use cases with expand, perhaps it's not warranted?
+  # when it's an absolute path probably not
   def assemble_path(<<"/", _::binary>> = path, _cwd), do: Path.expand(path)
 
+  # but here yes, because files through plain "imports" in css/cssex might refer to relative paths, such as those in node_modules but also others using relative paths to indicate their source
   def assemble_path(path, cwd),
     do: Path.join([cwd, path]) |> Path.expand()
 end

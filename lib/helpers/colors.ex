@@ -1,5 +1,7 @@
 defmodule CSSEx.Helpers.Colors do
-  @moduledoc false
+  @moduledoc """
+  Web colors taken from https://www.rapidtables.com/web/css/css-color.html
+  """
 
   @colors [
     ["aqua", "rgb(0, 255, 255)"],
@@ -161,5 +163,8 @@ defmodule CSSEx.Helpers.Colors do
     ["yellowgreen", "rgb(139, 205, 50)"]
   ]
 
+  @doc """
+  All web colors as list(["webcolor_identifier", "rgb(x,x,x)"])
+  """
   def colors_tuples(), do: @colors
 end

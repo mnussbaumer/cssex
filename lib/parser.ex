@@ -1,9 +1,6 @@
 defmodule CSSEx.Parser do
   @moduledoc """
-  The parser itself that generates or writes a CSS file based on an entry file.
-  {:ok, %CSSEx.Parser{}, final_binary | []}
-  {:error, %CSSEx.Parser{}}
-
+  The parser module that generates or writes a CSS file based on an entry file.
   """
 
   import CSSEx.Helpers.Shared,
@@ -84,15 +81,17 @@ defmodule CSSEx.Parser do
   Takes a file path to a cssex or css file and parses it into a final CSS
    representation returning either:
 
+  ```
   {:ok, %CSSEx.Parser{}, final_binary}
-  {:error, term}
+  {:error, %CSSEx.Parser{}}
+  ```
 
-  Additionally a %CSSEx.Parser{} struct with prefilled details can be passed as the first
+  Additionally a `%CSSEx.Parser{}` struct with prefilled details can be passed as the first
   argument in which case the parser will use it as its configuration. 
-  You can also pass a file path as the last argument and instead of returning the final binary on the :ok tuple it will write the css directly into that file path and return an empty list instead of the final binary
+  You can also pass a file path as the last argument and instead of returning the final binary on the `:ok` tuple it will write the css directly into that file path and return an empty list instead of the final binary
   """
   @spec parse_file(path :: String.t(), file_path :: String.t()) ::
-          {:ok, %CSSEx.Parser{}, String.t()} | {:error, term}
+          {:ok, %CSSEx.Parser{}, String.t()} | {:error, String.t(), valid?: false}
   def parse_file(base_path, file_path),
     do: parse_file(nil, base_path, file_path, nil)
 
@@ -108,10 +107,10 @@ defmodule CSSEx.Parser do
   end
 
   @doc """
-  Parses a String.t or a charlist and returns {:ok, %CSSEx.Parser{}, content_or_empty_list} or {:error, %CSSEx.Parser{}}.
-  If a file path is passed as the final argument it returns the :ok tuple with an empty list instead of the content and writes into the file path.
-  On error it returns an :error tuple with the %CSSEx.Parser{} having its :error key populated.
-  If the first argument is a prefilled %CSSEx.Parser{} struct the parser uses that as its basis allowing to provide an ETS table that can be retrieved in the end, or passing predefined functions, assigns or variables, prefixes and etc into the context of the parser.
+  Parses a `String.t` or a `charlist` and returns `{:ok, %CSSEx.Parser{}, content_or_empty_list}` or `{:error, %CSSEx.Parser{}}`.
+  If a file path is passed as the final argument it returns the `:ok` tuple with an empty list instead of the content and writes into the file path.
+  On error it returns an :error tuple with the `%CSSEx.Parser{}` having its `:error` key populated.
+  If the first argument is a prefilled `%CSSEx.Parser{}` struct the parser uses that as its basis allowing to provide an `ETS` table that can be retrieved in the end, or passing predefined functions, assigns or variables, prefixes and etc into the context of the parser.
   """
   @spec parse(content :: String.t() | charlist) ::
           {:ok, %CSSEx.Parser{valid?: true}, String.t() | []}
@@ -1080,10 +1079,12 @@ defmodule CSSEx.Parser do
         %{search_acc: acc} = data
       ) do
     new_data =
-      %{data | search_acc: []}
-      |> Map.put(type, [Map.fetch!(data, type), acc])
+      case type != :next do
+        true -> Map.put(data, type, [Map.fetch!(data, type), acc])
+        _ -> data
+      end
 
-    {:next_state, next, new_data, [{:next_event, :internal, {:parse, rem}}]}
+    {:next_state, next, %{new_data | search_acc: []}, [{:next_event, :internal, {:parse, rem}}]}
   end
 
   def handle_event(
@@ -1160,6 +1161,7 @@ defmodule CSSEx.Parser do
   # parsing variables or assigns if it's not nil there's a problem
   def set_scope(%{current_scope: nil} = data, scope), do: %{data | current_scope: scope}
 
+  @doc false
   # set var, it should be always false when this is called for the same reasons as
   # set_scope
   def set_add_var(%{current_add_var: false} = data), do: %{data | current_add_var: true}
@@ -1303,7 +1305,7 @@ defmodule CSSEx.Parser do
       true ->
         case maybe_replace_val(val, data) do
           {:ok, new_val} ->
-            add_css_var(data, [":root"], ["--", key, ":", new_val, ";"])
+            add_css_var(data, [":root"], key, new_val)
 
           {:error, {:not_declared, _, _} = error} ->
             add_error(data, error_msg(error))
@@ -1315,15 +1317,15 @@ defmodule CSSEx.Parser do
   end
 
   @doc false
-  def add_css_var(%{ets: ets, order_map: %{c: c} = om} = data, cc, to_add) do
+  def add_css_var(%{ets: ets, order_map: %{c: c} = om} = data, cc, key, val) do
     new_om =
       case :ets.lookup(ets, cc) do
         [{_, existing}] ->
-          :ets.insert(ets, {cc, [existing | to_add]})
+          :ets.insert(ets, {cc, [existing, ";--", key, ":", val]})
           om
 
         [] ->
-          :ets.insert(ets, {cc, to_add})
+          :ets.insert(ets, {cc, ["--", key, ":", val]})
 
           om
           |> Map.put(:c, c + 1)
@@ -1378,8 +1380,10 @@ defmodule CSSEx.Parser do
       |> String.trim()
       |> maybe_replace_val(data)
 
+    no_quotes = String.trim(cval, "\"")
+
     %{data | imports: [imports | ["@import", " ", cval, ";"]]}
-    |> add_to_dependencies(cval)
+    |> add_to_dependencies(no_quotes)
   end
 
   def validate_import(%{first_rule: false, line: line, column: col, warnings: warnings} = data) do
@@ -1611,8 +1615,20 @@ defmodule CSSEx.Parser do
     do: %{data | dependencies: Enum.concat(deps, new_deps)}
 
   @doc false
-  def add_to_dependencies(%{dependencies: deps} = data, val),
-    do: %{data | dependencies: [val | deps]}
+  def add_to_dependencies(%{dependencies: deps, file: file} = data, val) do
+    new_deps =
+      case not is_nil(file) and not is_nil(val) do
+        true ->
+          base_path = Path.dirname(file)
+          final_path = CSSEx.assemble_path(val, base_path)
+          [final_path | deps]
+
+        _ ->
+          deps
+      end
+
+    %{data | dependencies: new_deps}
+  end
 
   @doc false
   def stop_with_error(%{answer_to: from}, {:error, %__MODULE__{} = invalid}),
@@ -1633,6 +1649,18 @@ defmodule CSSEx.Parser do
   @doc false
   def add_error(%{line: line, column: column} = data, error) do
     %{data | valid?: false, error: "#{inspect(error)} :: l:#{line} c:#{column}"}
+    |> finish_error()
+  end
+
+  @doc false
+  def finish_error(%{file_list: file_list, error: error} = data) do
+    %{
+      data
+      | error:
+          Enum.reduce(file_list, error, fn file, acc ->
+            acc <> "\n on file: " <> file
+          end)
+    }
   end
 
   @doc false

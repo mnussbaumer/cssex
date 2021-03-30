@@ -25,7 +25,7 @@ defmodule CSSEx.Parser.Test do
       """,
       [
         "div{width:16px}",
-        ":root{--test:16px;}"
+        ":root{--test:16px}"
       ]
     },
     {

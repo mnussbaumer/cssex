@@ -1,13 +1,27 @@
 defmodule CSSEx.HSLA do
   alias CSSEx.Unit
 
+  @moduledoc """
+  Struct and helper functions for generating HSLA values.
+  """
   defstruct h: %Unit{value: 0, unit: nil},
             s: %Unit{value: 0, unit: "%"},
             l: %Unit{value: 0, unit: "%"},
             a: 1
 
+  @type t() :: %CSSEx.HSLA{
+          h: non_neg_integer,
+          s: non_neg_integer,
+          l: non_neg_integer,
+          a: non_neg_integer
+        }
+
   @colors CSSEx.Helpers.Colors.colors_tuples()
 
+  @doc """
+  Accepts any value in the form of a binary `"hsla(0, 10%, 20%, 0.5)"` or `"hsl(0, 10%, 20%)"`, any hexadecimal representation in binary in the form of `"#xxx"`, `"#xxxx"`, `"#xxxxxx"` or `"#xxxxxxxx"`, rgb/a as `"rgba(100,100,100,0.1)"` or `"rgb(10,20,30)"`, or any literal color name defined as web colors (CSSEx.Colors) - returns a `%CSSEx.HSLA{}` struct.
+  """
+  @spec new_hsla(String.t()) :: {:ok, %CSSEx.HSLA{}} | {:error, term}
   def new_hsla(<<"hsla", values::binary>>) do
     case Regex.run(~r/\((.+),(.+),(.+),(.+)\)/, values) do
       [_, h, s, l, a] ->
@@ -61,6 +75,11 @@ defmodule CSSEx.HSLA do
     end
   end)
 
+  @doc """
+  Converts an existing `%CSSEx.RGBA{}` struct into a `%CSSEx.HSLA{}` struct.
+  Taken from https://www.niwa.nu/2013/05/math-behind-colorspace-conversions-rgb-hsl/
+  """
+  @spec from_rgba(%CSSEx.RGBA{}) :: {:ok, %CSSEx.HSLA{}}
   def from_rgba(%CSSEx.RGBA{r: r, g: g, b: b, a: a}) do
     n_r = r / 255
     n_g = g / 255
@@ -93,13 +112,16 @@ defmodule CSSEx.HSLA do
 
     {:ok,
      %__MODULE__{
-       h: %Unit{value: hue_2, unit: nil},
-       s: %Unit{value: saturation, unit: "%"},
-       l: %Unit{value: luminance, unit: "%"},
+       h: %Unit{value: round(hue_2), unit: nil},
+       s: %Unit{value: round(saturation), unit: "%"},
+       l: %Unit{value: round(luminance), unit: "%"},
        a: a
      }}
   end
 
+  @doc """
+  Generates a `%CSSEx.HSLA{}` wrapped in an :ok tuple, from the values of h, s, l, and alpha. All values are treated as decimal.
+  """
   def new(h, s, l, a),
     do: {
       :ok,
@@ -111,6 +133,7 @@ defmodule CSSEx.HSLA do
       }
     }
 
+  @doc false
   def new_hue(val) when is_binary(val) do
     case Integer.parse(val, 10) do
       {parsed, _} -> valid_hue_val(parsed)
@@ -120,6 +143,7 @@ defmodule CSSEx.HSLA do
 
   def new_hue(val) when is_integer(val) or is_float(val), do: valid_hue_val(val)
 
+  @doc false
   def new_saturation(val) when is_binary(val) do
     case Integer.parse(val, 10) do
       {parsed, _} -> valid_saturation_val(parsed)
@@ -130,6 +154,7 @@ defmodule CSSEx.HSLA do
   def new_saturation(val) when is_integer(val) or is_float(val),
     do: valid_saturation_val(val)
 
+  @doc false
   def new_luminance(val) when is_binary(val) do
     case Integer.parse(val, 10) do
       {parsed, _} -> valid_luminance_val(parsed)
@@ -140,6 +165,7 @@ defmodule CSSEx.HSLA do
   def new_luminance(val) when is_integer(val) or is_float(val),
     do: valid_luminance_val(val)
 
+  @doc false
   def alpha_value(val, 10) do
     case Float.parse(val) do
       {parsed, _} -> valid_alpha_val(parsed)
@@ -147,15 +173,19 @@ defmodule CSSEx.HSLA do
     end
   end
 
+  @doc false
   def valid_hue_val(n) when n <= 360 and n >= 0, do: %Unit{value: n, unit: nil}
   def valid_hue_val(n), do: %Unit{value: 0, unit: nil}
 
+  @doc false
   def valid_saturation_val(n) when n <= 100 and n >= 0, do: %Unit{value: n, unit: "%"}
   def valid_saturation_val(_n), do: %Unit{value: 0, unit: "%"}
 
+  @doc false
   def valid_luminance_val(n) when n <= 100 and n >= 0, do: %Unit{value: n, unit: "%"}
   def valid_luminance_val(_n), do: %Unit{value: 0, unit: "%"}
 
+  @doc false
   def valid_alpha_val(n) when n > 0 and n <= 1, do: n
   def valid_alpha_val(_n), do: 1
 end

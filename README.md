@@ -21,13 +21,13 @@ Its main purpose is to provide a native Elixir pre-processor for CSS, in the vei
 ### Syntax:
 
 <ul>
-  <a href="#selectors">Selectors</a>
-  <a href="#variables">Variables</a>
-  <a href="#assigns">Assigns</a>
-  <a href="#functions">Functions</a>
-  <a href="#eex">EEx Blocks</a>
-  <a href="#comments">Comments</a>
-  <a href="#reserved">Reserved Tokens</a>
+  <li><a href="#selectors">Selectors</a><li>  
+  <li><a href="#variables">Variables</a></li>
+  <li><a href="#assigns">Assigns</a></li>
+  <li><a href="#functions">Functions</a></li>
+  <li><a href="#eex">EEx Blocks</a></li>
+  <li><a href="#comments">Comments</a></li>
+  <li><a href="#reserved">Reserved Tokens</a></li>
 </ul>
 
 <div id="selectors"></div>
@@ -458,7 +458,7 @@ end %>
 An EEx block has to evaluate to either a binary (a string) or an iodata list. It's declared as Elixir blocks but always with the opening tag including the equal sign: `<%=`.
 Inside EEx blocks you can use assigns with `@name_of_assign` syntax.
 
-Right now you do not have access to either cssex variables or functions declared in the stylesheet but, again, the result of evaluating the block can contain any valid cssex construct which will be parsed once it afterwards in the context of the stylesheet as regular cssex. 
+Right now you do not have access to either cssex variables or functions declared in the stylesheet but, again, the result of evaluating the block can contain any valid cssex construct which will be parsed afterwards in the context of the stylesheet as regular cssex before moving on to the remaining stylesheet.
 
 <div id="comments"></>
 
@@ -519,7 +519,7 @@ div { color: green; }
 And `../shared/samples.cssex`:
 
 ```css
-$tag div
+$()tag div
 #{tag} { background-color: white; color: orange; }
 ```
 
@@ -544,17 +544,15 @@ If you want multiple declarations to not be merged right now the only possibilit
 
 The final output always follows this format:
 
-`@charset`
-<br>
-`@import`s
-<br>
+```
+@charset
+@imports
+**:root { variables }**
 **all regular selectors and their rules**
-<br>
-`@font-face`s
-<br>
-`@media`s
-<br>
-`@keyframes`'
+@font-face
+@media
+@keyframes
+```
 
 
 <div id="installation"></div>
@@ -594,16 +592,19 @@ If you want to use other folder than priv you need to use an expandable path, e.
 
 config :yourapp_web, CSSEx,
   entry_points: [
-    {"../../../../apps/yourapp_web/assets/cssex/app.cssex",
-     "../../../../apps/yourapp_web/assets/css/app.css"}
+    {
+      "../../../../apps/yourapp_web/assets/cssex/app.cssex",     ### entry
+      "../../../../apps/yourapp_web/assets/css/app.css"          ### output
+    }
   ]
 ```
 
 Webpack can then use `app.css` as regularly.
+You can specify as many entry points as wanted.
 
 #### Adding the file watcher to your application supervision tree.
 
-And to your `yourapp_web` application file:
+Finally add to your `yourapp_web` application file:
 
 ```elixir
 defmodule YourAppWeb.Application do
@@ -634,7 +635,9 @@ end
 ```
 
 This will define an entry point file of `priv/static/cssex/base.cssex` which will output its parsed content into `priv/static/css/base.css`.
-In this case you'll need to create the folder and cssex file as well. It will log errors if the directory or file doesn't exist.
+In this case you'll need to create the folder and cssex file as well. It will log errors if the file doesn't exist. If the folder doesn't exist you'll need to restart your app for it to pick up.
+
+Now whenever you change something in the entry point or any of the files it depends on (`@include`) it will automatically recompile.
 
 <div id="tasks"></div>
 
@@ -642,7 +645,7 @@ In this case you'll need to create the folder and cssex file as well. It will lo
 
 Besides the automatic file watcher for development purposes it's also included a task for processing cssex files into css files.
 
-You can read ![cssex.parser task](lib/mix/tasks/css.parser.ex) for other details.
+You can read [cssex.parser task](lib/mix/tasks/css.parser.ex) for other details.
 The base syntax is:
 
 ```
