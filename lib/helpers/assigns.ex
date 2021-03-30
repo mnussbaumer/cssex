@@ -2,7 +2,7 @@ defmodule CSSEx.Helpers.Assigns do
   @moduledoc false
 
   import CSSEx.Parser, only: [close_current: 1, add_error: 1, add_error: 2]
-  import CSSEx.Helpers.Shared, only: [inc_col: 1, inc_line: 1]
+  import CSSEx.Helpers.Shared, only: [inc_col: 1, inc_line: 1, file_and_line_opts: 1]
   import CSSEx.Helpers.Error, only: [error_msg: 1]
   import CSSEx.Helpers.EEX, only: [build_bindings: 1]
   @line_terminators CSSEx.Helpers.LineTerminators.code_points()
@@ -11,12 +11,14 @@ defmodule CSSEx.Helpers.Assigns do
   Enum.each(@line_terminators, fn char ->
     def parse(
           [?;, unquote(char) | rem],
-          %{current_assign: current_key, current_value: current_value, line: line} = data
+          %{current_assign: current_key, current_value: current_value} = data
         ) do
       ckey = IO.chardata_to_string(current_key)
       cval = String.trim_trailing(IO.chardata_to_string(current_value))
+      bindings = build_bindings(data)
 
-      {final_val, _} = Code.eval_string(cval, build_bindings(data), line: line)
+      {final_val, _} =
+        Code.eval_string(cval, [{:assigns, bindings} | bindings], file_and_line_opts(data))
 
       new_data =
         data

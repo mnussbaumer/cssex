@@ -3,6 +3,7 @@ defmodule CSSEx.Helpers.Shared do
 
   alias CSSEx.Helpers.Error
   @appendable_first_char CSSEx.Helpers.SelectorChars.appendable_first_char()
+  @line_terminators CSSEx.Helpers.LineTerminators.code_points()
 
   # increment the column token count
   def inc_col(%{column: column} = data, amount \\ 1),
@@ -268,4 +269,18 @@ defmodule CSSEx.Helpers.Shared do
       do: true
 
   def valid_attribute_kv?(_, _), do: false
+
+  def calc_line_offset(eex_lines, final) do
+    lines =
+      for <<char <- final>>, <<char>> in @line_terminators, reduce: 0 do
+        acc -> acc + 1
+      end
+
+    eex_lines - lines
+  end
+
+  def file_and_line_opts(%{file: nil, line: line}), do: [line: line || 0]
+
+  def file_and_line_opts(%{file: file, line: line}),
+    do: [file: file, line: line || 0]
 end

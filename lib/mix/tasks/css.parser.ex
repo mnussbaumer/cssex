@@ -4,39 +4,47 @@ defmodule Mix.Tasks.Cssex.Parser do
 
   @moduledoc """
   Task to parse cssex files into css files.
-  You can use two types of flags, --e (and additionally --a) or --c.
+  You can use two types of flags, `--e` (and additionally `--a`) or `--c`.
 
   For the --e flag you use any number of
 
-  --e path/to_cssex/file.cssex=path/to_css/output.css
+  `--e path/to_cssex/file.cssex=path/to_css/output.css`
 
-  And if you want those paths to be relative to some application you can pass it with --m
+  And if you want those paths to be relative to some application you can pass it with `--a`
 
-  --a myapp_web
+  `--a myapp_web`
 
-  arguments to specify each entry and its output file, or a single path to the cssex where the output file will be in the same directory, with the same file name but the extension css added to it
+  arguments to specify each entry and its output file, or a single path to the cssex where the output file will be in the same directory, with the same file name but the extension cssex replaced by css
 
-  --e path/to_cssex/file.cssex
+  `--e path/to_cssex/file.cssex`
 
-  The --c flag is used to indicate an entry in the config of the application, in order to read the entry points from there
+  The `--c` flag is used to indicate an entry in the config of the application, in order to read the entry points from there
 
-  --c myapp_web
+  `--c myapp_web`
+
+  So it would look something like:
+  ```
+  mix cssex.parser --e path/to_cssex/file.cssex=path/to_css/output.css
+  ```
   """
 
   @doc """
-  Run the parser with `mix cssex.parser`
+  Run the parser with `mix cssex.parser`.
+
   Required arguments:
 
+  ```
   --e /source/path.cssex=/final/path.css
   --e /source/path.cssex
   --e source/path.cssex=final/path.css --a yourapp_web
   --e source/path.cssex --a yourapp_web
-
+  ```
   Or
-
+  ```
   --c yourapp_web
+  ```
 
-  Where `yourapp_web` specifies a config under the key CSSEx, with a key of :entry_points composed of tuple pairs of source & destination files.
+  Where `yourapp_web` specifies a config under the key `CSSEx`, with a key of `:entry_points` composed of tuple pairs of source & destination files.
 
   """
   def run([]),

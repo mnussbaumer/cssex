@@ -1,7 +1,16 @@
 defmodule CSSEx.Helpers.Function do
   @moduledoc false
 
-  import CSSEx.Helpers.Shared, only: [inc_col: 1, inc_col: 2, inc_line: 1]
+  import CSSEx.Helpers.Shared,
+    only: [
+      inc_col: 1,
+      inc_col: 2,
+      inc_line: 1,
+      inc_line: 2,
+      calc_line_offset: 2,
+      file_and_line_opts: 1
+    ]
+
   import CSSEx.Parser, only: [add_error: 2]
   import CSSEx.Helpers.Error, only: [error_msg: 1]
 
@@ -27,16 +36,14 @@ defmodule CSSEx.Helpers.Function do
           " end"
         ])
 
-      {fun_result, _} =
-        Code.eval_string(full_string,
-          file: data.file,
-          line: data.line
-        )
+      {fun_result, _} = Code.eval_string(full_string, [], file_and_line_opts(data))
+
+      line_correction = calc_line_offset(1, fun_string)
 
       new_data =
         data
         |> inc_col(2)
-        |> inc_line()
+        |> inc_line(line_correction)
         |> add_fun(name, fun_result)
 
       {:ok, {new_data, rem}}
@@ -144,19 +151,19 @@ defmodule CSSEx.Helpers.Function do
             try do
               case apply(function, final_args) do
                 {:ok, result} when is_binary(result) ->
-                  finish_call(data, rem, to_charlist(result))
+                  finish_call(data, rem, result)
 
                 {:ok, [_ | _] = result} ->
-                  finish_call(data, rem, to_charlist(IO.iodata_to_binary(result)))
+                  finish_call(data, rem, IO.iodata_to_binary(result))
 
                 {:ok, result} ->
-                  finish_call(data, rem, to_charlist(to_string(result)))
+                  finish_call(data, rem, to_string(result))
 
                 result when is_binary(result) ->
-                  finish_call(data, rem, to_charlist(result))
+                  finish_call(data, rem, result)
 
                 [_ | _] = result ->
-                  finish_call(data, rem, to_charlist(IO.iodata_to_binary(result)))
+                  finish_call(data, rem, IO.iodata_to_binary(result))
 
                 error ->
                   finish_error(data, error)
@@ -172,7 +179,15 @@ defmodule CSSEx.Helpers.Function do
     end
   end
 
-  def finish_call(data, rem, result) do
+  def finish_call(data, rem, result) when is_binary(result) do
+    line_correction = calc_line_offset(0, result)
+
+    data
+    |> inc_line(line_correction)
+    |> finish_call(rem, to_charlist(result))
+  end
+
+  def finish_call(data, rem, result) when is_list(result) do
     {:ok, {data, :lists.flatten([result | rem])}}
   end
 

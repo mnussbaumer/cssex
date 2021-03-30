@@ -34,6 +34,7 @@ defmodule CSSEx.Helpers.Output do
     |> maybe_add_charset()
     |> maybe_add_imports()
     |> maybe_add_font_faces()
+    |> maybe_add_css_variables()
     |> add_general()
     |> maybe_add_media()
     |> maybe_add_keyframes()
@@ -117,6 +118,42 @@ defmodule CSSEx.Helpers.Output do
       error -> add_error(ctx, error)
     end
   end
+
+  def maybe_add_css_variables(
+        %__MODULE__{
+          to_file: nil,
+          acc: acc,
+          data: %CSSEx.Parser{ets: ets}
+        } = ctx
+      ) do
+    case take_root(ets) do
+      [] -> ctx
+      [{k, values}] -> %__MODULE__{ctx | acc: [acc | [k, "{", values, "}"]]}
+    end
+  end
+
+  def maybe_add_css_variables(
+        %__MODULE__{
+          to_file: to_file,
+          data: %CSSEx.Parser{ets: ets},
+          valid?: true
+        } = ctx
+      ) do
+    case take_root(ets) do
+      [] ->
+        ctx
+
+      [{k, values}] ->
+        case IO.binwrite(to_file, [k, "{", values, "}"]) do
+          :ok -> ctx
+          error -> add_error(ctx, error)
+        end
+    end
+  end
+
+  def maybe_add_css_variables(ctx), do: ctx
+
+  def take_root(ets), do: :ets.take(ets, [":root"])
 
   def add_general(
         %__MODULE__{

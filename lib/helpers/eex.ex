@@ -2,7 +2,17 @@ defmodule CSSEx.Helpers.EEX do
   @moduledoc false
 
   import CSSEx.Parser, only: [open_current: 2, close_current: 1, add_error: 2]
-  import CSSEx.Helpers.Shared, only: [inc_col: 1, inc_col: 2, inc_line: 1, inc_line: 2]
+
+  import CSSEx.Helpers.Shared,
+    only: [
+      inc_col: 1,
+      inc_col: 2,
+      inc_line: 1,
+      inc_line: 2,
+      calc_line_offset: 2,
+      file_and_line_opts: 1
+    ]
+
   import CSSEx.Helpers.Error, only: [error_msg: 1]
   @line_terminators CSSEx.Helpers.LineTerminators.code_points()
   @white_space CSSEx.Helpers.WhiteSpace.code_points()
@@ -18,10 +28,10 @@ defmodule CSSEx.Helpers.EEX do
     end
   end
 
-  def finish(rem, %{line: line} = data, %{acc: eex_block} = state) do
+  def finish(rem, %{line: line} = data, %{acc: eex_block, line: s_line}) do
     acc = IO.chardata_to_string(eex_block)
     final = eval_with_bindings(acc, data)
-    line_correction = calc_line_offset(state, final)
+    line_correction = calc_line_offset(s_line, final)
 
     new_final = :lists.flatten([to_charlist(final) | rem])
     :erlang.garbage_collect()
@@ -108,20 +118,11 @@ defmodule CSSEx.Helpers.EEX do
     end)
   end
 
-  def calc_line_offset(%{line: eex_lines}, final) do
-    lines =
-      for <<char <- final>>, <<char>> in @line_terminators, reduce: 0 do
-        acc -> acc + 1
-      end
-
-    eex_lines - lines
-  end
-
   def inc_level(%{level: level} = state, amount \\ 1),
     do: %{state | level: level + amount}
 
   def eval_with_bindings(acc, data),
-    do: EEx.eval_string(acc, assigns: build_bindings(data))
+    do: EEx.eval_string(acc, [assigns: build_bindings(data)], file_and_line_opts(data))
 
   def build_bindings(%{assigns: a, local_assigns: la}),
     do:
