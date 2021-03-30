@@ -1,4 +1,11 @@
 defmodule CSSEx.Parser do
+  @moduledoc """
+  The parser itself that generates or writes a CSS file based on an entry file.
+  {:ok, %CSSEx.Parser{}, final_binary | []}
+  {:error, %CSSEx.Parser{}}
+
+  """
+
   import CSSEx.Helpers.Shared,
     only: [inc_col: 1, inc_col: 2, inc_line: 1, remove_last_from_chain: 1]
 
@@ -77,52 +84,60 @@ defmodule CSSEx.Parser do
   Takes a file path to a cssex or css file and parses it into a final CSS
    representation returning either:
 
-  {:ok, %__MODULE__{}, final_binary}
+  {:ok, %CSSEx.Parser{}, final_binary}
   {:error, term}
 
-  Additionally a %__MODULE__{} struct with prefilled details can be passed as the first
-  argument in which case the parser will use it as its configuration. This is used
-  internally when parsing @include statements in order to propagate the parent assigns
-  and scope, but can also be used to pass assigns or scope that don't live on the cssex
-  files, or keep ownership of the rules ETS table upon finishing in case iterating
-  through all final css rules is desired.
+  Additionally a %CSSEx.Parser{} struct with prefilled details can be passed as the first
+  argument in which case the parser will use it as its configuration. 
+  You can also pass a file path as the last argument and instead of returning the final binary on the :ok tuple it will write the css directly into that file path and return an empty list instead of the final binary
   """
   @spec parse_file(path :: String.t(), file_path :: String.t()) ::
-          {:ok, %__MODULE__{}, String.t()} | {:error, term}
-  def parse_file(data \\ nil, base_path, file_path, parse_to_file \\ nil)
+          {:ok, %CSSEx.Parser{}, String.t()} | {:error, term}
+  def parse_file(base_path, file_path),
+    do: parse_file(nil, base_path, file_path, nil)
 
-  def parse_file(nil, base_path, file_path, parse_to_file) do
-    {:ok, pid} = __MODULE__.start_link()
-    :gen_statem.call(pid, {:start_file, base_path, file_path, parse_to_file})
-  end
+  def parse_file(%CSSEx.Parser{} = data, base_path, file_path),
+    do: parse_file(data, base_path, file_path, nil)
 
-  def parse_file(%__MODULE__{} = data, base_path, file_path, parse_to_file) do
+  def parse_file(base_path, file_path, parse_to_file),
+    do: parse_file(nil, base_path, file_path, parse_to_file)
+
+  def parse_file(data, base_path, file_path, parse_to_file) do
     {:ok, pid} = __MODULE__.start_link(data)
     :gen_statem.call(pid, {:start_file, base_path, file_path, parse_to_file})
   end
 
   @doc """
-  Takes a binary and parses it into a final CSS representation and returns either:
-  {:ok, %__MODULE__{}, final_binary}
-  {:error, term}
-
-  Again, a predefined %__MODULE__{} struct can be passed as the first argument to
-  force the parser to operate from that, including adding assigns or scope.
+  Parses a String.t or a charlist and returns {:ok, %CSSEx.Parser{}, content_or_empty_list} or {:error, %CSSEx.Parser{}}.
+  If a file path is passed as the final argument it returns the :ok tuple with an empty list instead of the content and writes into the file path.
+  On error it returns an :error tuple with the %CSSEx.Parser{} having its :error key populated.
+  If the first argument is a prefilled %CSSEx.Parser{} struct the parser uses that as its basis allowing to provide an ETS table that can be retrieved in the end, or passing predefined functions, assigns or variables, prefixes and etc into the context of the parser.
   """
-  def parse(data \\ nil, content, parse_to_file \\ nil)
+  @spec parse(content :: String.t() | charlist) ::
+          {:ok, %CSSEx.Parser{valid?: true}, String.t() | []}
+          | {:error, %CSSEx.Parser{error: String.t(), valid?: false}}
 
-  def parse(nil, content, parse_to_file) when is_binary(content),
-    do: parse(nil, to_charlist(content), parse_to_file)
+  def parse(content), do: parse(nil, content, nil)
 
-  def parse(nil, content, parse_to_file) do
-    {:ok, pid} = __MODULE__.start_link()
-    :gen_statem.call(pid, {:start, content, parse_to_file})
-  end
+  @spec parse(base_config :: %CSSEx.Parser{} | nil, content :: String.t() | charlist) ::
+          {:ok, %CSSEx.Parser{valid?: true}, String.t() | []}
+          | {:error, %CSSEx.Parser{error: String.t(), valid?: false}}
 
-  def parse(%__MODULE__{} = data, content, parse_to_file) when is_binary(content),
+  def parse(%__MODULE__{} = data, content), do: parse(data, content, nil)
+  def parse(content, file), do: parse(nil, content, file)
+
+  @spec parse(
+          base_config :: %CSSEx.Parser{} | nil,
+          content :: String.t() | charlist,
+          output_file :: String.t() | nil
+        ) ::
+          {:ok, %CSSEx.Parser{valid?: true}, String.t() | []}
+          | {:error, %CSSEx.Parser{error: String.t(), valid?: false}}
+
+  def parse(data, content, parse_to_file) when is_binary(content),
     do: parse(data, to_charlist(content), parse_to_file)
 
-  def parse(%__MODULE__{} = data, content, parse_to_file) do
+  def parse(data, content, parse_to_file) do
     {:ok, pid} = __MODULE__.start_link(data)
     :gen_statem.call(pid, {:start, content, parse_to_file})
   end
@@ -130,7 +145,8 @@ defmodule CSSEx.Parser do
   @impl :gen_statem
   def callback_mode(), do: :handle_event_function
 
-  def start_link() do
+  @doc false
+  def start_link(nil) do
     :gen_statem.start_link(__MODULE__, nil, [])
   end
 
@@ -263,7 +279,7 @@ defmodule CSSEx.Parser do
   def handle_event(
         :internal,
         {:parse, '@fn::' ++ rem},
-        state,
+        _state,
         data
       ) do
     new_data =
@@ -677,7 +693,7 @@ defmodule CSSEx.Parser do
   # parsing it
   def handle_event(
         :internal,
-        {:parse, '%!' ++ rem},
+        {:parse, '@!' ++ rem},
         {:parse, :next},
         data
       ) do
@@ -692,7 +708,7 @@ defmodule CSSEx.Parser do
 
   def handle_event(
         :internal,
-        {:parse, '%()' ++ rem},
+        {:parse, '@()' ++ rem},
         {:parse, :next},
         data
       ) do
@@ -707,7 +723,7 @@ defmodule CSSEx.Parser do
 
   def handle_event(
         :internal,
-        {:parse, '%?' ++ rem},
+        {:parse, '@?' ++ rem},
         {:parse, :next},
         data
       ) do
@@ -723,7 +739,7 @@ defmodule CSSEx.Parser do
   # We found a var assignment when searching for the next token, prepare for parsing it
   def handle_event(
         :internal,
-        {:parse, '@!' ++ rem},
+        {:parse, '$!' ++ rem},
         {:parse, :next},
         data
       ) do
@@ -738,7 +754,7 @@ defmodule CSSEx.Parser do
 
   def handle_event(
         :internal,
-        {:parse, '@*!' ++ rem},
+        {:parse, '$*!' ++ rem},
         {:parse, :next},
         data
       ) do
@@ -754,7 +770,7 @@ defmodule CSSEx.Parser do
 
   def handle_event(
         :internal,
-        {:parse, '@()' ++ rem},
+        {:parse, '$()' ++ rem},
         {:parse, :next},
         data
       ) do
@@ -769,7 +785,7 @@ defmodule CSSEx.Parser do
 
   def handle_event(
         :internal,
-        {:parse, '@*()' ++ rem},
+        {:parse, '$*()' ++ rem},
         {:parse, :next},
         data
       ) do
@@ -785,7 +801,7 @@ defmodule CSSEx.Parser do
 
   def handle_event(
         :internal,
-        {:parse, '@?' ++ rem},
+        {:parse, '$?' ++ rem},
         {:parse, :next},
         data
       ) do
@@ -800,7 +816,7 @@ defmodule CSSEx.Parser do
 
   def handle_event(
         :internal,
-        {:parse, '@*?' ++ rem},
+        {:parse, '$*?' ++ rem},
         {:parse, :next},
         data
       ) do
@@ -933,7 +949,7 @@ defmodule CSSEx.Parser do
     new_data =
       data
       |> Map.put(:current_key, [char])
-      |> open_current(:rule, rem)
+      |> open_current(:rule)
       |> inc_col()
       |> first_rule()
 
@@ -1139,6 +1155,7 @@ defmodule CSSEx.Parser do
         {:keep_state, %{inc_col(data) | current_value: [cval, char]},
          [{:next_event, :internal, {:parse, rem}}]}
 
+  @doc false
   # set the scope for whatever we're doing, scopes can only be set by when
   # parsing variables or assigns if it's not nil there's a problem
   def set_scope(%{current_scope: nil} = data, scope), do: %{data | current_scope: scope}
@@ -1147,6 +1164,7 @@ defmodule CSSEx.Parser do
   # set_scope
   def set_add_var(%{current_add_var: false} = data), do: %{data | current_add_var: true}
 
+  @doc false
   # add the variable to the global and local scopes
   def add_to_var(
         %{current_scope: :global, scope: scope, local_scope: local_scope} = data,
@@ -1185,6 +1203,7 @@ defmodule CSSEx.Parser do
     end
   end
 
+  @doc false
   # add to font-face ETS table when dealing with a font-face block
   def add_to_attributes(
         %{font_face: true, ets_fontface: ets, font_face_count: ffc} = data,
@@ -1212,11 +1231,7 @@ defmodule CSSEx.Parser do
   end
 
   # add attribute to the ETS table
-  def add_to_attributes(
-        %{ets: ets, split_chain: chain} = data,
-        key,
-        val
-      ) do
+  def add_to_attributes(data, key, val) do
     case maybe_replace_val(val, data) do
       {:ok, new_val} ->
         case HShared.valid_attribute_kv?(key, new_val) do
@@ -1232,6 +1247,7 @@ defmodule CSSEx.Parser do
     end
   end
 
+  @doc false
   # add a special case for when parsing a font-face
   def add_current_selector(%{font_face: true} = data), do: data
 
@@ -1248,6 +1264,7 @@ defmodule CSSEx.Parser do
     end
   end
 
+  @doc false
   # reset the accumulators and scope
   def reset_current(data),
     do: %{
@@ -1261,6 +1278,7 @@ defmodule CSSEx.Parser do
         current_function: []
     }
 
+  @doc false
   # TODO when tightening the scopes this has to take into account creating a variable in a given selector, right now it will crash when variables that create css vars (@*) are declared inside elements
   def maybe_add_css_var(%{current_add_var: false} = data, _, _), do: data
 
@@ -1296,6 +1314,7 @@ defmodule CSSEx.Parser do
     end
   end
 
+  @doc false
   def add_css_var(%{ets: ets, order_map: %{c: c} = om} = data, cc, to_add) do
     new_om =
       case :ets.lookup(ets, cc) do
@@ -1315,11 +1334,7 @@ defmodule CSSEx.Parser do
     %{data | order_map: new_om}
   end
 
-  @doc """
-  Right now just checks if the charset has enclosing doube-quotes, ", might want to
-  check if the value is actually a valid charset? 
-  https://www.iana.org/assignments/character-sets/character-sets.xhtml.
-  """
+  @doc false
   def validate_charset(%{current_value: charset, charset: nil, first_rule: true} = data) do
     new_charset =
       charset
@@ -1355,6 +1370,7 @@ defmodule CSSEx.Parser do
     |> reset_current()
   end
 
+  @doc false
   def validate_import(%{current_value: current_value, first_rule: true, imports: imports} = data) do
     {:ok, cval} =
       current_value
@@ -1378,9 +1394,11 @@ defmodule CSSEx.Parser do
     }
   end
 
+  @doc false
   def first_rule(%{first_rule: false} = data), do: data
   def first_rule(data), do: %{data | first_rule: false}
 
+  @doc false
   def add_warning(%{warnings: warnings, column: col, line: line} = data, :missing, {:parse, _}),
     do: %{
       data
@@ -1389,6 +1407,7 @@ defmodule CSSEx.Parser do
         ]
     }
 
+  @doc false
   # reply back according to the level
   def reply_finish(%{answer_to: from, level: 0} = data) do
     reply =
@@ -1415,10 +1434,7 @@ defmodule CSSEx.Parser do
     }
   end
 
-  @doc """
-  Adds a media query, taking care of translating the contents parsed in the upper
-  level to the correct selectors
-  """
+  @doc false
   def add_media_query(
         %{current_value: current_value, media_parent: media_p} = data,
         %{ets: inner_ets, media: media, order_map: om}
@@ -1456,12 +1472,10 @@ defmodule CSSEx.Parser do
     end
   end
 
-  @doc """
-  Adds a keyframe element, where the chain is simply ["@keyframes", animation_name]
-  """
+  @doc false
   def add_keyframe(
-        %{ets_keyframes: original_ets, current_value: current_value} = data,
-        %{ets: inner_ets} = _new_inner_data
+        %{current_value: current_value} = data,
+        %{ets: inner_ets} = _inner_data
       ) do
     parsed = IO.chardata_to_string(current_value)
 
@@ -1478,6 +1492,7 @@ defmodule CSSEx.Parser do
     end
   end
 
+  @doc false
   def create_data_for_inner(
         %{
           line: line,
@@ -1535,6 +1550,7 @@ defmodule CSSEx.Parser do
     }
   end
 
+  @doc false
   def add_media_parent(
         data,
         %{current_value: current_value, media_parent: media_parent} = _parent_data
@@ -1553,6 +1569,7 @@ defmodule CSSEx.Parser do
     %{data | media_parent: new_media_parent}
   end
 
+  @doc false
   def merge_inner_data(
         %{
           warnings: existing_warnings,
@@ -1589,12 +1606,15 @@ defmodule CSSEx.Parser do
     }
   end
 
+  @doc false
   def merge_dependencies(%{dependencies: deps} = data, %__MODULE__{dependencies: new_deps}),
     do: %{data | dependencies: Enum.concat(deps, new_deps)}
 
+  @doc false
   def add_to_dependencies(%{dependencies: deps} = data, val),
     do: %{data | dependencies: [val | deps]}
 
+  @doc false
   def stop_with_error(%{answer_to: from}, {:error, %__MODULE__{} = invalid}),
     do: {:stop_and_reply, invalid, [{:reply, from, {:error, invalid}}]}
 
@@ -1603,20 +1623,24 @@ defmodule CSSEx.Parser do
     {:stop_and_reply, new_data, [{:reply, from, {:error, new_data}}]}
   end
 
+  @doc false
   def add_error(%{current_reg: [{s_line, s_col, step} | _]} = data) do
     final_error = "#{error_msg({:terminator, step})} at l:#{s_line} col:#{s_col} to"
 
     add_error(%{data | current_reg: []}, final_error)
   end
 
+  @doc false
   def add_error(%{line: line, column: column} = data, error) do
     %{data | valid?: false, error: "#{inspect(error)} :: l:#{line} c:#{column}"}
   end
 
-  def open_current(%{current_reg: creg, line: l, column: c} = data, element, rule \\ nil) do
+  @doc false
+  def open_current(%{current_reg: creg, line: l, column: c} = data, element) do
     %{data | current_reg: [{l, c, element} | creg]}
   end
 
+  @doc false
   def close_current(%{current_reg: [_ | t]} = data), do: %{data | current_reg: t}
   def close_current(%{current_reg: [], level: level} = data) when level > 0, do: data
 end

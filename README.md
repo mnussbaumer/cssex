@@ -4,20 +4,33 @@ A small pre-processing extension language for CSS written in Elixir.
 Its main purpose is to provide a native Elixir pre-processor for CSS, in the vein of Sass/Scss.
 
 <div align="center">
-     <a href="#functionality">Functionality</a><span>&nbsp; |</span>
+     <a href="#syntax">syntax</a><span>&nbsp; |</span>
      <a href="#caveats">Caveats</a><span>&nbsp; |</span>
      <a href="#installation">Installation</a><span>&nbsp; |</span>
      <a href="#usage">Usage</a><span>&nbsp; |</span>
-     <a href="#motivation">Motivation</a><span>&nbsp; |</span>
+     <a href="#tasks">Tasks</a><span>&nbsp; |</span>
+     <a href="#internals">Internals</a><span>&nbsp; |</span>
      <a href="#roadmap">Roadmap</a><span>&nbsp; |</span>
      <a href="#about">About</a><span>&nbsp; |</span>
      <a href="#copyright">Copyright</a>
 </div>
 
 
-<div id="functionality"></div>
+<div id="syntax"></div>
 
-### Functionality:
+### Syntax:
+
+<ul>
+  <a href="#selectors">Selectors</a>
+  <a href="#variables">Variables</a>
+  <a href="#assigns">Assigns</a>
+  <a href="#functions">Functions</a>
+  <a href="#eex">EEx Blocks</a>
+  <a href="#comments">Comments</a>
+  <a href="#reserved">Reserved Tokens</a>
+</ul>
+
+<div id="selectors"></div>
 
 #### Nested selectors and '&' concatenation
 
@@ -28,11 +41,21 @@ button {
     padding: 5px;
     
     .class_1 {
-        color: yellow;
+      color: yellow;
+        svg&, .child {
+ 	  fill: red;
+	}
     }
 
     &.concatenated_class {
-       padding: 10px;
+      padding: 10px;
+    }
+
+    @media screen and (max-width: 756px) {
+    	   font-size: 24px;
+	   @media and (min-width: 500px) {
+	   	  font-weight: 300;
+           }
     }
 }
 ```
@@ -40,16 +63,61 @@ button {
 ##### into
 
 ```css
-button { background-color: blue; color: white; padding: 5px; }
-button .class_1  { color: yellow; }
-button.concatenated_class { padding: 10px; }
+button { background-color: blue; color: white; padding: 5px }
+button .class_1  { color: yellow }
+button svg.class_1, button .class_1.child { fill: red }
+button.concatenated_class { padding: 10px }
+
+@media screen and (max-width: 756px) { button { font-size: 24px } }
+@media screen and (max-width: 756px) and (min-width: 500px) { button { font-weight: 300 } }
 ```
+
+The `&` operator can only be used inside a block and either at the start or end of each selector (or if single inside a `:not(&)`, or `:is(&)`).
+If it's at the start it will append that selector to the parent, unless it's a tag selector (`p`, `canvas`, `your-custom-element`, etc) in which case it will prepend itself, and raise an error if you're trying to do so with a parent tag.
+
+If it's at the end then the selector becomes the parent of it's parent.
+
+```css
+div, section {
+  &.concat, .parent& {
+    .inner { color: blue; }
+    &.inner-concat { color: red; }
+  }
+}    
+
+```
+
+into
+
+```css
+div.concat .inner,
+.parent div .inner,
+section.concat .inner,
+.parent section .inner {
+  color:blue
+}
+
+div.concat.inner-concat,
+.parent.inner-concat div,
+section.concat.inner-concat,
+.parent.inner-concat section {
+
+  color:red
+}
+```
+
+
+Bare selectors inside blocks create regular selection chains.
+
+`@media` declarations can be nested as well but as of now there's no semantic checks done, which means that if you write something non-sensical it will be placed as is.
+
+<div id="variables"></div>
 
 #### Variables
 
 ```css
-@!a_variable red;
-@!another_variable 12;
+$!a_variable red;
+$!another_variable 12;
 
 div {
     color: <$a_variable$>;
@@ -70,7 +138,7 @@ div {
 #### Variables that create CSS variables on declaration
 
 ```css
-@*!primary red;
+$*!primary red;
 
 div { color: <$primary$>; }
 ```
@@ -88,9 +156,10 @@ div { color: red; }
 #### Scoped Variables by file and set only if undefined variables 
 
 ##### file_1.cssex
+
 ```css
-@!scope_variable_1 20px;
-@!scope_variable_2 blue;
+$!scope_variable_1 20px;
+$!scope_variable_2 blue;
 
 div { font-size: <$scope_variable_1$>; }
 
@@ -105,8 +174,8 @@ div { font-size: <$scope_variable_1$>; }
 ##### file_2.cssex
 
 ```css
-@()scope_variable_1 16px;
-@!scope_variable_2 red;
+$()scope_variable_1 16px;
+$!scope_variable_2 red;
 
 .something {
       font-size: <$scope_variable_1$>;
@@ -119,8 +188,8 @@ div { font-size: <$scope_variable_1$>; }
 ##### file_3.cssex
 
 ```css
-@?scope_variable_1 12px;
-@?scope_variable_2 green;
+$?scope_variable_1 12px;
+$?scope_variable_2 green;
 
 .something-2 {
       font-size: <$scope_variable_1$>;
@@ -148,8 +217,83 @@ div { font-size: 20px; }
 }
 ```
 
-These scope ruling might still be changed regarding the scoped workings and the undefined versions. Variables are inserted always using the interpolation markers, `<$ variable_name $>`.
+Variables are literal values that can be used throughout a spreadsheet. They're inserted in place using the interpolation markers, `<$ variable_name $>`, or `$::variable_name`.
+The declaration form is:
 
+`$!name_of_variable literal_value;`
+
+`literal_value` shouldn't be surround by quotes unless you want the quotes to be part of the value. It must always end with semi-colon followed by newline.
+
+Using variables with `@include`'s directives allow one to share or create values that are overridable or specific to a stylesheet/include.
+
+When a stylesheet declares an `@include` the current variables in scope will be made available on the child.
+Child files (the one's `@include`d) can override the parent's variable value (after the child has been processed) if they declare them with `$!`,
+
+You can otherwise limit this by declaring them with:
+`$()` which scopes the variable locally so they do not become available to the parent afterwards, and you can also conditionally set them with:
+
+`$?` which only sets them for the file if it isn't set in its scope yet. This allows you to create customisable themes, in that you can have a file(s) that specifies all colors, sizes and others, and then make the theme "components", set their needed values with `$()` which will populate those for the scope only if they haven't been declared previously.
+
+You can also declare a variable with `$*!`, that does all the same but sets as well a CSS variable on the root element, with the same name as the variable declared, prefixed with `--`.
+
+If you referr to a variable that hasn't been declared or not in scope you'll get an error.
+
+<div id="assigns"></div>
+
+#### Assigns
+
+Assigns are the equivalent of variables but for Elixir values and they have the same options and scoping as that of variables, but instead of being declared with `$!`, `$()` and `$?`, they're declared with `@!`, `@()` and `@?`.
+
+Variables are available inside EEx blocks or when calling functions. Since they can hold any elixir term they're great to create basic iterable structures to generate CSS based on repetition or iteration.
+
+```css
+@!colors %{
+	 primary: "red",
+	 secondary: "rgb(120, 255, 80)"
+};
+
+<%= for {color, val} <- @colors, reduce: "" do
+    acc ->
+    	acc <> """
+
+	$*!#{color} #{val};
+
+	.btn-#{color} {
+	      	background-color: #{val};
+	}
+
+	"""
+end %>
+
+```
+
+into
+
+```css
+.root {
+      --primary: red;
+      --secondary: rgb(120, 255, 80)
+}
+
+.btn-primary { background-color: red }
+.btn-secondary { background-color: rgb(120, 255, 80) }
+```
+
+(while also creating both the `primary` and `secondary` variables that are accessible through the remaining spreadsheet and `@include`d children.
+
+Inside EEx blocks they can be referred to with Elixir's `@assign_name` notation. When passing them to function as arguments they can be passed in as `@::assign_name`
+
+So `@fn::name_of_function(@::colors)` would call that function with the argument being translated to the Elixir value of that variable.
+As literal variables it will error if they're used without having been declared before or not available in scope.
+
+The declaration form is:
+
+`@!name_of_variable {:tuple, %{elixir: "map"}};`
+
+It has to be terminated with semicolon followed by newline.
+
+
+<div id="functions"></>
 
 #### Functions
 
@@ -172,7 +316,7 @@ These scope ruling might still be changed regarding the scoped workings and the 
     |> to_string
 end;
 
-@!red red;
+$!red red;
 .test{color: @fn::lighten_test(<$red$>, 10)}
 .test{color: @fn::lighten_test(#fdf, 10);}
 ```
@@ -186,9 +330,34 @@ end;
 }
 ```
 
-Functions can execute any code, and can receive an arbitrary block of content, that is made available in its body as a variable named, `ctx_content`. They need to return either `{:ok, binary | iodata}` or `binary | iodata`. You do not have access to functions, assigns, or variables inside functions, but you can pass them as arguments. The returned binary is also parsed before being inserted so you can also  make use of them on the returned result. 
+Functions can execute any code, and can receive an arbitrary block of content, that is made available in its body as a variable named, `ctx_content`. They need to evaluate to either `{:ok, binary | iodata}` or `binary | iodata`. You do not have access to functions, assigns, or variables inside functions, but you can pass them as arguments. The returned binary is also parsed before being inserted so you can also  make use of them on the returned result.
+Inside a function you can call any Elixir code.
 
-```	
+A function declaration has the following form:
+
+```scss
+@fn name_of_function(args, list) ->
+   body
+end;
+```
+
+`@fn` followed by the name and argument list followed by `->`. It must be terminated with `end`, semicolon followed by newline.
+
+And a function call for that function would be `@fn::name_of_function(red, #ffffff)`.
+Every function can take a last optional parent that is made available in the body of the function as `ctx_content`. In this case the call would be:
+
+```scss
+@fn::name_of_function(red, #ffffff,
+   .content-made-available {
+     &p.inside-name-of-function { color: blue; }
+   }
+)
+```
+
+When successfully called the result of evaluating it replaces the function call in the stylesheet and is parsed as if it was normal cssex code. This means that if a function returns content that includes  function calls, or interpolation, or declare variables, all those things are evaluated once it returns.
+
+
+```scss
 @fn enforce_size(what, size) ->
   "#{what}: #{size};" <>
   "min-#{what}: #{size};" <>
@@ -228,7 +397,7 @@ end;
 
 And then using for instance:
 
-```
+```scss
 .section {
   @fn::my_squarer(&.inner, color: red;)
 }
@@ -236,7 +405,7 @@ And then using for instance:
 
 Results in:
 
-```
+```css
 .section.inner{
   color:red;
   width:20px;
@@ -248,51 +417,98 @@ Results in:
 }
 ```
 
+Functions declared in a stylesheet (even `@included` children!) become available from then on. Further declarations of the same function name will override the previous one from then on.
 
-#### Assigns
+<div id="eex"></>
 
-Assigns are as if variables and they have the same options and scoping as that of variables, but instead of being `@!`, `@*!`, `@()` and `@?`, they're identified by `%!`, `%()` and `%?`.
-They can hold any valid elixir term and are only availble inside EEx blocks.
+#### EEx blocks
 
-```css
-%!colors %{
-	 primary: "red",
-	 secondary: "rgb(120, 255, 80)"
-};
 
-<%= for {color, val} <- @colors, reduce: [] do
+```elixir
+@!breakpoints [
+  sm: {"0px", "14px"},
+  md: {"768px", "16px"},
+  lg: {"992px", "18px"},
+  xl: {"1200px", "20px"},
+  xxl: {"1440px", "20px"},
+];
+
+
+<%= for {breakpoint, {_size, val}} <- @breakpoints, reduce: "" do
     acc ->
-    	["""
-	.btn-#{color} {
-	      	background-color: #{val};
+    	acc <> """
+	
+        .#{breakpoint}-section-title {
+	   font-size: #{val};
 	}
-	""" | acc]
+
+	"""
 end %>
 ```
 
 ##### into
 
 ```css
-.btn-primary { background-color: red; }
-.btn-secondary { background-color: rgb(120, 255, 80); }
+.sm-section-title { font-size: 14px }
+.md-section-title { font-size: 16px }
+.lg-section-title { font-size: 18px }
+// ... etc
 ```
 
-Assigns are passed down into `@includes` children files when being processed and can be overridden locally or conditionally with `()` or `?` instead of `!`.
+An EEx block has to evaluate to either a binary (a string) or an iodata list. It's declared as Elixir blocks but always with the opening tag including the equal sign: `<%=`.
+Inside EEx blocks you can use assigns with `@name_of_assign` syntax.
 
-An EEx block has to return either a binary (a String.t) or an iodata list. When parsing an EEx block the CSSEx parser first isolates the block (<%= ......everything %>) and then uses plain EEx eval while passing the assigns that are available to the block. The returned value can have `<$a_variable_outside$>` interpolation markers and those will be parsed after the block is returned, but not while being compiled with EEx.
+Right now you do not have access to either cssex variables or functions declared in the stylesheet but, again, the result of evaluating the block can contain any valid cssex construct which will be parsed once it afterwards in the context of the stylesheet as regular cssex. 
 
+<div id="comments"></>
+
+#### Comments
+
+```css
+// you can use comments in both of these forms, all text will be stripped out
+/* some
+
+other {
+   .commented-out part {
+
+}
+*/
+```
+
+<div id="reserved"></div>
+
+#### Reserved Tokens
+
+Using any of these outside of the syntax shown before can lead to errors:
+
+```
+&
+@!
+@?
+@()
+@::
+$!
+$*!
+$?
+$*?
+$()
+$*()
+$::
+@include
+@fn
+<% ....
+<$ ....
+//
+/* ....
+```
 
 <div id="caveats"></div>
 
 ### Caveats
 
-Some details like scoping rules and what scope identifiers will be available is still open ended.
+CSSEx does merging of selector declarations when they've been exactly specified (or resolved to) as the same.
 
-Postfixing operators with the & concatenator is still not working and I'm still considering if introducing them is really worthwile. 
-
-Due to the way it parses and builds output the final CSS files avoid a lot of repetition. It doesn't parse and insert the parsed result in place, instead it builds a table of selectors -> attributes and while parsing rules adds them to that selector. The order of the attributes for a selector is guaranteed, but the final layout of the selectors themselves is not.
-
-This means that if you have two files, one:
+For instance
 
 ```css
 div { color: green; }
@@ -303,29 +519,30 @@ div { color: green; }
 And `../shared/samples.cssex`:
 
 ```css
-div { background-color: white; color: orange; }
+$tag div
+#{tag} { background-color: white; color: orange; }
 ```
 
-The final output for `div` will always have the attributes in their declaration order:
+The final output will always have `div` declared first, and the attributes in their declaration order:
+
 ```css
-div { color: green; background-color: white, color: orange; }
+div { color: green; background-color: white, color: orange }
+.sample { color: red }
 ```
 
-But the position of this `div` selector in the final CSS is non deterministic. It means it could end up:
+Instead of
+
 ```css
-div { color: green; background-color: white, color: orange; }
+div { color: green; }
 .sample { color: red; }
+div { background-color: white, color: orange }
 ```
 
-Or
+This means it can condense the final output. Right now it doesn't substitute repeated rules, but that might be added in the future.
 
-```css
-.sample { color: red; }
-div { color: green; background-color: white, color: orange; }
-```
-This doesn't affect the CSS ruling though as that is defined by the selectors specificity and the attributes ordering, in this case `div` would always have its attribute `color` end up as being `orange` and never `green`.
+If you want multiple declarations to not be merged right now the only possibility is to have different entry points that produce plain css files and use them with regular `@import` rules on a final css file that isn't parsed by cssex. 
 
-The only exceptions are special CSS rules, which will appear in the following order always.
+The final output always follows this format:
 
 `@charset`
 <br>
@@ -365,11 +582,28 @@ To use it, add to your `dev.exs` configuration file:
 
 ```elixir
 
-config :your_app_web, CSSEx,
+config :yourapp_web, CSSEx,
   entry_points: [{"priv/static/cssex/base.cssex", "priv/static/css/base.css"}]
 ```
 
-And to your `your_app_web` application file:
+##### Note
+
+If you want to use other folder than priv you need to use an expandable path, e.g. the phoenix assets folder, you can do it by using, for instance in this case for an umbrella with a phoenix app:
+
+```elixir
+
+config :yourapp_web, CSSEx,
+  entry_points: [
+    {"../../../../apps/yourapp_web/assets/cssex/app.cssex",
+     "../../../../apps/yourapp_web/assets/css/app.css"}
+  ]
+```
+
+Webpack can then use `app.css` as regularly.
+
+#### Adding the file watcher to your application supervision tree.
+
+And to your `yourapp_web` application file:
 
 ```elixir
 defmodule YourAppWeb.Application do
@@ -393,8 +627,8 @@ defmodule YourAppWeb.Application do
 
   # add this
   def cssex_config() do
-    Application.get_env(:your_app_web, CSSEx)
-    |> CSSEx.make_config(Application.app_dir(:your_app_web))
+    Application.get_env(:yourapp_web, CSSEx)
+    |> CSSEx.make_config(Application.app_dir(:yourapp_web))
   end
 end
 ```
@@ -402,42 +636,45 @@ end
 This will define an entry point file of `priv/static/cssex/base.cssex` which will output its parsed content into `priv/static/css/base.css`.
 In this case you'll need to create the folder and cssex file as well. It will log errors if the directory or file doesn't exist.
 
-<div id="motivation"></div>
+<div id="tasks"></div>
 
-## Motivation
+## Tasks
 
-I can't remember when I wrote pure CSS stylesheets without Sass/SCSS and I think they cover very well for the limitations CSS has (due to being something the browser needs to parse). It allows scaffolding entire themes and utility functions and write much more organised and intelligible CSS (the downsides are found in CSS as well, lack of organisation leads to style contamination, etc, but what it allows to do better is a net gain).
+Besides the automatic file watcher for development purposes it's also included a task for processing cssex files into css files.
 
-Sass/SCSS though, being a pre-processed language requires having `Ruby` and `libsass`, or `Node.js`/`NPM` along with (now) `dart-sass` (previously `libsass` as well). It's not a huge problem but it's an additional dependency that has always to be pulled in. As what I write is mostly Elixir I wanted a way of doing the sort of Sass pre-processing completely from Elixir land. Sass also has some limitations as in what it can do in terms of language by exposing a small subset of iteration constructs and data types.
+You can read ![cssex.parser task](lib/mix/tasks/css.parser.ex) for other details.
+The base syntax is:
 
-I think that some times having access to a bigger array of tools can help and in that sense decided to instead of re-implementing `for` constructs and such using EEx would allow usage of any Elixir tool. Because it's a templating engine it also has a simple model to provide variables to the templates which then made the `assigns` idea straightforward to implement.
+```
+# if using entry points defined in a config similar to the watcher
+mix cssex.parser --c yourapp_web 
 
-This all was prompted in first place by thinking about what a CMS and/or Static Site Generator written in Elixir would require - for what I envisioned a style processor that favoured the creation of easily customisable "themes" (including programatic customisation) made a lot of sense, and because it's something that can be useful for others, even if I don't end up writing the CMS/SSG, I decided to start by writing it.
+# if using manual entry points
+mix cssex.parser --e path/to/file.cssex=path/to/output.css
+```
 
-It needs quite a bit of polishing and work but it already offers a programmatic interface (read the tests if you want to see) and a basic file-watching pre-processing pipeline to use in regular projects.
+<div id="internals"></div>
 
-The chosen architecture lends itself very well also to integrate additional functionality, such as validation of CSS rules, rule-prefixing, tree-shaking, rules transformation and so on. It can also process in parallel as many entry points/files/binaries as required (but not files included from inside files obviously as those might depend on the parents and due to the variable/assigns scoping can bleed "upwards" and into siblings)
+## Internals
 
-In terms of speed, although I haven't done extensive benchmarking as I want first to finish the basic roadmap, seems to be faster than dart-sass in small files in a significant way - not sure how it plays out with bigger files - but looks promising.
+Right now the library is mostly for use as regular pre-processor with a syntax that aids in building re-usable themes but it's been designed up 'till now to be expandable and to accomodate more use cases, such as dynamically feeding assigns, variables, functions, to templates, producing tables of css selectors and other details for post-processing, and generating on the fly CSS.
+
+None of this is yet implemented in the form of a consistent api nor totally defined, but if you have a use case for any of those open an issue to discuss.
+
+Other than that check the parser.ex to see how you can start an individual parser that can write to a file or return a binary with the result of the parsing.
 
 <div id="roadmap"></div>
 
 ## Roadmap
 
-- Define the scoping rules and possibilities for variables, assigns, and functions
-
-
-With these I would consider it feature complete.
-Additional things that depend on interest are:
-
-- re-writing it completely in Erlang, but this requires a way of deciding how to interpret EEx blocks and passing assigns to Erlang blocks, everything else - structs can be records, parser function heads can use guards instead of meta-programming to be generated - translates pretty much 1:1 to Erlang;
-- being able to wrap the whole thing in a downloadable package for use even without Erlang&Elixir installed or for projects not using Elixir - this is trickier as it would require ERTS to be shipped with the package - libsass+node-sass and dart+sass hover around 5mb unpacked each - a release+erts can probably be slimmed down but never to these values
+- Fix error reporting and include file on error output, duh!
+- Additional functionality related with dynamic generation and visualisation of CSS in a structured format. This is mostly for use cases outside of pure pre-processing and more to do with tree-shaking, automatic vendor-prefixing, searchable CSS definitions, etc.
 
 <div id="about"></div>
 
 ## About
 
-![Cocktail Logo](https://github.com/mnussbaumer/cssex/blob/master/logo/cocktail_logo.png?raw=true "Cocktail Logo")
+![Cocktail Logo](logo/cocktail_logo.png?raw=true "Cocktail Logo")
 
 [© rooster image in the cocktail logo](https://commons.wikimedia.org/wiki/User:LadyofHats)
 

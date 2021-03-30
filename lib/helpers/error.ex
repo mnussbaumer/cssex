@@ -1,4 +1,6 @@
 defmodule CSSEx.Helpers.Error do
+  @moduledoc false
+
   # this means that the error is being bubbled up
   def error_msg(%{valid?: false, error: error}), do: error
 

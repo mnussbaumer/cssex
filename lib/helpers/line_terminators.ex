@@ -1,8 +1,8 @@
 defmodule CSSEx.Helpers.LineTerminators do
-  @moduledoc """
-  Helpers for matching on line terminator characters (and 1 sequence) according to the Unicode std.
-  https://en.wikipedia.org/wiki/Newline#Unicode
-  """
+  @moduledoc false
+
+  # Helpers for matching on line terminator characters (and 1 sequence) according to the Unicode std.
+  # https://en.wikipedia.org/wiki/Newline#Unicode
 
   @line_terminators_unicode [
                               "\u000A",

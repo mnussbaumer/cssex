@@ -3,7 +3,7 @@ defmodule CSSEx.Ampersand.Test do
   alias CSSEx.Parser
 
   @basic """
-  @!width: 567px;
+  $!width: 567px;
   div{
     color: red;
     &.test {

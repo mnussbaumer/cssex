@@ -1,6 +1,9 @@
 defmodule CSSEx.Helpers.Media do
+  @moduledoc false
+
   import CSSEx.Helpers.Shared, only: [inc_col: 1]
   @line_terminators CSSEx.Helpers.LineTerminators.code_points()
+  @media_split_regex ~r/(?<maybe_var_1>\$::)?.+(?<split>:).+(?<maybe_var_2>\$::)|(?<split_2>:)/
 
   defstruct column: 0, acc: [], parenthesis: 0, p_acc: %{}
 
@@ -84,11 +87,14 @@ defmodule CSSEx.Helpers.Media do
           "or"
 
         declaration ->
-          String.split(declaration, ~r/:/, trim: true)
+          String.split(declaration, @media_split_regex, trim: true, on: [:split, :split_2])
           |> Enum.map(fn token ->
             case CSSEx.Helpers.Interpolations.maybe_replace_val(String.trim(token), data) do
-              {:ok, new_token} -> new_token
-              {:error, _} -> raise "#{token} was not declared"
+              {:ok, new_token} ->
+                new_token
+
+              {:error, _} ->
+                raise "#{token} was not declared"
             end
           end)
           |> Enum.join(":")

@@ -1,4 +1,6 @@
 defmodule CSSEx.Helpers.Shared do
+  @moduledoc false
+
   alias CSSEx.Helpers.Error
   @appendable_first_char CSSEx.Helpers.SelectorChars.appendable_first_char()
 
@@ -72,14 +74,16 @@ defmodule CSSEx.Helpers.Shared do
     do: throw({:error, {:invalid_parent_concat, rem}})
 
   def ampersand_join([head, <<"&", rem::binary>> | t], acc) do
+    {new_head, joint} = check_head(head)
+
     case is_trail_concat(rem) do
       true ->
-        ampersand_join([head <> rem | t], acc)
+        ampersand_join([new_head <> rem <> joint | t], acc)
 
       false ->
-        case is_lead_concat(head) do
+        case is_lead_concat(new_head) do
           true ->
-            ampersand_join([rem <> head | t], acc)
+            ampersand_join([rem <> new_head <> joint | t], acc)
 
           false ->
             throw({:error, {:invalid_component_concat, rem, head}})
@@ -93,6 +97,9 @@ defmodule CSSEx.Helpers.Shared do
            on: [:amper],
            trim: true
          ) do
+      [_] ->
+        ampersand_join(t, [acc | [head]])
+
       [parent, "&"] ->
         case :lists.reverse(acc) do
           [previous | rem] ->
@@ -112,13 +119,22 @@ defmodule CSSEx.Helpers.Shared do
           _ ->
             throw({:error, {:invalid_parent_concat, pseudo}})
         end
-
-      [_] ->
-        ampersand_join(t, [acc | [head]])
     end
   end
 
   def ampersand_join([], acc), do: :lists.flatten(acc)
+
+  def check_head(head) do
+    case Regex.split(~r/.?(?<amper>\(?&\)?).?$/, head,
+           include_captures: true,
+           on: [:amper],
+           trim: true
+         ) do
+      [_] -> {head, ""}
+      [parent, "&"] -> {parent, "&"}
+      [pseudo, "(&)"] -> {pseudo, "(&)"}
+    end
+  end
 
   Enum.each(@appendable_first_char, fn char ->
     def is_trail_concat(<<unquote(char)::utf8, _::binary>>), do: true

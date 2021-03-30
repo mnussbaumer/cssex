@@ -19,7 +19,7 @@ defmodule CSSEx.Function.Test do
     {:ok, %CSSEx.HSLA{hsla | l: %CSSEx.Unit{l_unit | value: new_l}} |> to_string}
   end;
 
-  @!red red;
+  $!red red;
   .test{color: @fn::lighten_test(<$red$>, 10)}
   .test{color: @fn::lighten_test(#fdf, 10);}
   """
@@ -39,7 +39,7 @@ defmodule CSSEx.Function.Test do
              "div{color:hsla(0,100%,60%,1.0)}\n"
            } =
              Parser.parse("""
-             @!test @fn::lighten(red, 10);
+             $!test @fn::lighten(red, 10);
              div { color: <$test$>;}
              """)
   end
@@ -51,7 +51,7 @@ defmodule CSSEx.Function.Test do
              "div{color:hsla(0,100%,40%,1.0)}\n"
            } =
              Parser.parse("""
-             @!test @fn::darken(red, 10);
+             $!test @fn::darken(red, 10);
              div { color: <$test$>;}
              """)
   end
@@ -63,7 +63,7 @@ defmodule CSSEx.Function.Test do
              "div{color:rgba(255,0,0,0.6)}\n"
            } =
              Parser.parse("""
-             @!test @fn::opacity(red, 0.6);
+             $!test @fn::opacity(red, 0.6);
              div { color: <$test$>;}
              """)
   end
@@ -71,7 +71,7 @@ defmodule CSSEx.Function.Test do
   test "function errors result in parsing errors" do
     assert {:error, %Parser{error: error}} =
              Parser.parse("""
-             @!test @fn::opacity(red);
+             $!test @fn::opacity(red);
              div { color: <$test$>;}
              """)
 

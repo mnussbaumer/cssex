@@ -1,4 +1,6 @@
 defmodule CSSEx.Helpers.Comments do
+  @moduledoc false
+
   import CSSEx.Helpers.Shared, only: [inc_col: 1, inc_col: 2, inc_line: 1]
   @line_terminators CSSEx.Helpers.LineTerminators.code_points()
 

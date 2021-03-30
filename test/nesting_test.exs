@@ -103,4 +103,22 @@ defmodule CSSEx.Nesting.Test do
              }
              """)
   end
+
+  test "nesting multiple combinations" do
+    assert {
+             :ok,
+             _,
+             "div.concat .inner,.parent div .inner,section.concat .inner,.parent section .inner{color:blue}div.concat.inner-concat,.parent.inner-concat div,section.concat.inner-concat,.parent.inner-concat section{color:red}\n"
+           } =
+             Parser.parse("""
+             div, section {
+
+                &.concat, .parent& {
+
+                   .inner { color: blue; }
+                   &.inner-concat { color: red; }
+                }
+             }  
+             """)
+  end
 end

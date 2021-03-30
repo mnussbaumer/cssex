@@ -1,4 +1,6 @@
 defmodule CSSEx.Helpers.Colors do
+  @moduledoc false
+
   @colors [
     ["aqua", "rgb(0, 255, 255)"],
     ["black", "rgb(0, 0, 0)"],

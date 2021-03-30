@@ -6,7 +6,7 @@ defmodule CSSEx.Parser.Test do
     {
       "basic variable replacement",
       """
-      @!test 16px;
+      $!test 16px;
 
       div { width: <$test$>; }
       """,
@@ -17,7 +17,7 @@ defmodule CSSEx.Parser.Test do
     {
       "variable replacement and root placing of css var",
       """
-      @*!test 16px;
+      $*!test 16px;
 
       div {
          width: <$test$>;
@@ -31,7 +31,7 @@ defmodule CSSEx.Parser.Test do
     {
       "assigns work correctly",
       """
-      %!test %{
+      @!test %{
         test_1: :b,
         test_2: 1
       };
@@ -42,7 +42,7 @@ defmodule CSSEx.Parser.Test do
     {
       "assigns can be used in eex blocks",
       """
-      %!var %{
+      @!var %{
         test_1: %{
       	  "color" => "#ffffff",
       	  "background-color" => "#000000"
@@ -74,7 +74,7 @@ defmodule CSSEx.Parser.Test do
     {
       "interpolation works in attributes",
       """
-      @!test px;
+      $!test px;
 
       div {
         border: 2<$test$> solid red;
@@ -85,7 +85,7 @@ defmodule CSSEx.Parser.Test do
     {
       "interpolation works in rules and other non-attributes",
       """
-      @!test sm;
+      $!test sm;
       div.<$test$>{border:2px solid red;
       }
       """,

@@ -1,4 +1,6 @@
 defmodule CSSEx.Helpers.Output do
+  @moduledoc false
+
   @enforce_keys [:data]
   @temp_ext "-cssex.temp"
   defstruct [:data, :to_file, :file_path, valid?: true, acc: []]
@@ -233,7 +235,7 @@ defmodule CSSEx.Helpers.Output do
           :ok ->
             case File.cp("#{file_path}#{@temp_ext}", file_path) do
               :ok ->
-                spawn(fn -> File.rm!("#{file_path}#{@temp_ext}") end)
+                spawn(fn -> File.rm("#{file_path}#{@temp_ext}") end)
                 ctx
 
               error ->

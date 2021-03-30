@@ -3,7 +3,7 @@ defmodule CSSEx.Import.Test do
   alias CSSEx.Parser
 
   @basic """
-  @!width 567px;
+  $!width 567px;
   @charset "UTF-8";
   @import "test.css";
   @import url("/other.css") print;
