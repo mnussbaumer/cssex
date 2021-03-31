@@ -13,7 +13,8 @@ defmodule CSSEx do
     no_start: false,
     dependency_graph: %{},
     monitors: %{},
-    reply_to: []
+    reply_to: [],
+    reprocess: []
   ]
 
   @type t :: %__MODULE__{
@@ -108,11 +109,8 @@ defmodule CSSEx do
         Map.put(acc, path, [path])
       end)
 
-    new_data =
-      %{data | dependency_graph: new_dg}
-      |> synch_watchers()
-
-    {:keep_state, new_data, [{:next_event, :internal, :start}]}
+    {:keep_state, %{data | dependency_graph: new_dg},
+     [{:next_event, :internal, :synch_watchers}, {:next_event, :internal, :start}]}
   end
 
   # for each entry point check if it exists, if it does start a parser under a monitor, if it not log an error
@@ -142,39 +140,53 @@ defmodule CSSEx do
         :internal,
         {:process, file_path},
         _,
-        %{entry_points: entries, monitors: monitors} = data
+        %{entry_points: entries, monitors: monitors, reprocess: reprocess} = data
       ) do
-    self_pid = self()
-    final_file = Map.get(entries, file_path)
+    case Map.get(monitors, file_path) do
+      nil ->
+        self_pid = self()
+        final_file = Map.get(entries, file_path)
 
-    {_pid, monitor} =
-      Process.spawn(__MODULE__, :parse_file, [file_path, final_file, self_pid], [:monitor])
+        {_pid, monitor} =
+          Process.spawn(__MODULE__, :parse_file, [file_path, final_file, self_pid], [:monitor])
 
-    new_monitors = Map.put(monitors, monitor, file_path)
+        new_monitors = Map.put(monitors, monitor, file_path)
+        new_reprocess = Enum.filter(reprocess, fn path -> file_path == path end)
 
-    {:next_state, :processing, %{data | monitors: new_monitors},
-     [{:next_event, :internal, :set_status}, @timeout]}
+        {:next_state, :processing, %{data | monitors: new_monitors, reprocess: new_reprocess},
+         [@timeout]}
+
+      _ ->
+        case file_path in reprocess do
+          true ->
+            {:keep_state_and_data, [{:next_event, :internal, :set_status}]}
+
+          false ->
+            {:keep_state, %{data | reprocess: [file_path | reprocess]},
+             [{:next_event, :internal, :set_status}]}
+        end
+    end
   end
 
   def handle_event(:internal, {:post_process, parser}, _, _data) do
     case parser do
       %CSSEx.Parser{valid?: true, warnings: [], file: file} ->
         Logger.info(
-          IO.ANSI.green() <> "\nCSSEx PROCESSED file :: #{file}\n" <> IO.ANSI.default_color()
+          IO.ANSI.green() <> "CSSEx PROCESSED file :: #{file}\n" <> IO.ANSI.default_color()
         )
 
-        {:keep_state_and_data, []}
+        {:keep_state_and_data, [{:next_event, :internal, :set_status}]}
 
-      %CSSEx.Parser{valid?: true, warnings: warnings} ->
+      %CSSEx.Parser{valid?: true, warnings: warnings, file: file} ->
         Enum.each(warnings, fn warning ->
-          Logger.warn(warning)
+          Logger.warn("CSSEx warning when processing #{file} ::\n\n #{warning}\n")
         end)
 
-        {:keep_state_and_data, []}
+        {:keep_state_and_data, [{:next_event, :internal, :set_status}]}
 
-      %CSSEx.Parser{valid?: false, error: error} ->
-        Logger.error(error)
-        {:keep_state_and_data, []}
+      {original_file, %CSSEx.Parser{valid?: false, error: error}} ->
+        Logger.error("CSSEx ERROR when processing #{original_file} :: \n\n #{error}\n")
+        {:keep_state_and_data, [{:next_event, :internal, :set_status}]}
     end
   end
 
@@ -187,7 +199,6 @@ defmodule CSSEx do
 
   def handle_event(:internal, :maybe_reply, :ready, %{reply_to: reply_to}) do
     to_reply = Enum.map(reply_to, fn from -> {:reply, from, :ready} end)
-
     {:keep_state_and_data, to_reply}
   end
 
@@ -198,107 +209,106 @@ defmodule CSSEx do
         entry_points: eps
       }) do
     events =
-      case Map.get(dependency_graph, file_path) do
-        [_ | _] = deps ->
-          Enum.reduce(deps, [], fn dep, acc ->
-            case Map.get(eps, dep) do
-              nil -> acc
-              _ -> [{:next_event, :internal, {:process, dep}} | acc]
-            end
-          end)
-          |> Enum.uniq()
+      Enum.reduce(eps, [], fn {entry, _}, acc ->
+        deps = Map.get(dependency_graph, entry)
 
-        _ ->
-          [{:next_event, :internal, :set_status}]
-      end
+        case file_path in deps || file_path == entry do
+          true -> [{{:timeout, {:to_process, entry}}, 50, nil} | acc]
+          false -> acc
+        end
+      end)
+      |> Enum.uniq()
 
     {:keep_state_and_data, events}
   end
 
-  def handle_event(:info, {:DOWN, ref, :process, _, reason}, _, %{monitors: monitors} = data) do
-    {_path, new_monitors} = Map.pop(monitors, ref)
+  def handle_event({:timeout, {:to_process, entry}}, _, _, _data) do
+    {:keep_state_and_data, [{:next_event, :internal, {:process, entry}}]}
+  end
 
-    case reason do
-      %CSSEx.Parser{error: error, file_list: file_list, dependencies: deps, file: original_file} =
-          parser
-      when not is_nil(error) ->
-        new_data =
-          data
-          |> add_dependencies(original_file, :lists.flatten([file_list | deps]))
-          |> synch_watchers()
+  def handle_event(
+        :internal,
+        {:refresh_dependencies,
+         %CSSEx.Parser{valid?: true, file: original_file, dependencies: dependencies}},
+        _state,
+        %{dependency_graph: d_g} = data
+      ) do
+    new_d_g = clean_up_deps(d_g, original_file, dependencies)
 
-        {:keep_state, new_data,
-         [
-           {:next_event, :internal, {:post_process, parser}},
-           {:next_event, :internal, :set_status}
-         ]}
+    {:keep_state, %{data | dependency_graph: new_d_g},
+     [{:next_event, :internal, :synch_watchers}]}
+  end
 
-      _ ->
-        {:keep_state, %{data | monitors: new_monitors}, [{:next_event, :internal, :set_status}]}
+  def handle_event(
+        :internal,
+        {:refresh_dependencies,
+         {original_file, %CSSEx.Parser{file: error_file, dependencies: dependencies}}},
+        _state,
+        %{dependency_graph: d_g} = data
+      ) do
+    new_d_g = clean_up_deps(d_g, original_file, [error_file | dependencies])
+
+    {:keep_state, %{data | dependency_graph: new_d_g},
+     [{:next_event, :internal, :synch_watchers}]}
+  end
+
+  def handle_event(:internal, :synch_watchers, _, %{watchers: watchers} = data) do
+    watch_paths = watch_list(data)
+    new_watchers = synch_watchers(watch_paths, watchers)
+    new_data = maybe_start_watchers(watch_paths, %{data | watchers: new_watchers})
+    {:keep_state, new_data, []}
+  end
+
+  def handle_event(
+        :info,
+        {:DOWN, ref, :process, _, _reason},
+        _,
+        %{monitors: monitors, reprocess: reprocess} = data
+      )
+      when is_map_key(monitors, ref) do
+    {path, new_monitors} = Map.pop(monitors, ref)
+    new_data = %{data | monitors: new_monitors}
+
+    case path in reprocess do
+      false ->
+        {:keep_state, new_data, [{:next_event, :internal, :set_status}]}
+
+      true ->
+        {:keep_state, new_data, [{{:timeout, {:to_process, path}}, 50, nil}]}
     end
   end
 
-  # TODO
-  # we should keep track of the deps in an additional way in order to have a full
-  # mapping of the files after a sucessful parse
-  # as it is it sets everything correctly but if one dependency is removed from the
-  # stylesheets the watchers will still be running for its directory - usually it
-  # won't be much of a problem since it gets reset whenever the server is started
-  # but ideally it would compare the previous dependencies with the new ones
-  # [old, ones] -- [new, ones]
-  # if it's different than [] it means those remaining can be removed
-  # to decide it just has to check if any current depedency overlaps with the same
-  # directory - if not then it's safe to turn off the watcher for that directory,
-  # if yes then we keep the watcher
-  def handle_event(:info, {:parsed, parsed}, _, data) do
-    case parsed do
-      {:ok, %CSSEx.Parser{dependencies: deps, file: original_file} = parser, _} ->
-        new_data =
-          data
-          |> add_dependencies(original_file, deps)
-          |> synch_watchers()
+  def handle_event(:info, {:DOWN, _, _, _, _}, _, _data),
+    do: {:keep_state_and_data, []}
 
-        {:keep_state, new_data, [{:next_event, :internal, {:post_process, parser}}]}
-
-      {:error, %CSSEx.Parser{dependencies: deps, file: original_file} = parser} ->
-        new_data =
-          data
-          |> add_dependencies(original_file, deps)
-          |> synch_watchers()
-
-        {:keep_state, new_data, [{:next_event, :internal, {:post_process, parser}}]}
-    end
+  def handle_event(:info, {:parsed, parsed}, _, _data) do
+    {:keep_state_and_data,
+     [
+       {:next_event, :internal, {:refresh_dependencies, parsed}},
+       {:next_event, :internal, {:post_process, parsed}}
+     ]}
   end
 
-  def handle_event(:info, {:file_event, _worker_pid, {file_path, events}}, _, data) do
+  def handle_event(:info, {:file_event, _worker_pid, {file_path, events}}, _, _data) do
     case (:modified in events and :closed in events) or :closed in events do
       false ->
         {:keep_state_and_data, []}
 
       true ->
-        {:next_state, :processing, data, [{:next_event, :internal, {:maybe_process, file_path}}]}
+        {:keep_state_and_data, [{:next_event, :internal, {:maybe_process, file_path}}]}
     end
   end
 
   def handle_event(:info, {:file_event, worker_pid, :stop}, _, %{watchers: watchers} = data) do
-    new_data =
-      case Map.pop(watchers, worker_pid) do
-        {path, new_watchers} when is_binary(path) ->
-          {_, final_watchers} = Map.pop(new_watchers, path)
-          %{data | watchers: final_watchers}
+    {path, new_watchers} = Map.pop(watchers, worker_pid)
+    {_, final_watchers} = Map.pop(new_watchers, path)
+    new_data = %{data | watchers: final_watchers}
 
-        {nil, _} ->
-          data
-      end
-      |> synch_watchers()
-
-    {:keep_state, new_data, [{:next_event, :internal, :set_status}]}
+    {:keep_state, new_data, [{:next_event, :internal, {:retry_watchers, [path]}}]}
   end
 
-  def handle_event(:info, :retry_watchers, _, data) do
-    new_data =
-      data
-      |> synch_watchers()
+  def handle_event(:info, {:retry_watchers, paths}, _, data) do
+    new_data = maybe_start_watchers(paths, data)
 
     {:keep_state, new_data, []}
   end
@@ -311,47 +321,130 @@ defmodule CSSEx do
   end
 
   @doc false
-  def add_dependencies(%{dependency_graph: dg} = data, file, dependencies) do
-    new_dg =
-      dependencies
-      |> Enum.reduce(dg, fn dep, acc ->
-        Map.update(acc, dep, [file], fn paths -> [file | paths] end)
-      end)
-      |> Map.update(file, [file], fn paths -> [file | paths] end)
-      |> Enum.reduce(%{}, fn {k, v}, acc -> Map.put(acc, k, Enum.uniq(v)) end)
+  def clean_up_deps(d_graph, original_file, dependencies) do
+    Enum.reduce(dependencies, d_graph, fn dep, acc ->
+      case Map.get(acc, dep) do
+        nil ->
+          Map.put(acc, dep, [original_file])
 
-    %{data | dependency_graph: new_dg}
+        deps ->
+          case original_file in deps do
+            true -> acc
+            false -> Map.put(acc, dep, [original_file | deps])
+          end
+      end
+    end)
+    |> Enum.reduce(d_graph, fn {file, deps}, acc ->
+      case original_file do
+        ^file ->
+          Map.put(acc, file, dependencies)
+
+        parent ->
+          case file in dependencies do
+            true ->
+              case parent in deps do
+                true -> Map.put(acc, file, deps)
+                false -> Map.put(acc, file, [parent | deps])
+              end
+
+            false ->
+              case parent in deps do
+                true -> Map.put(acc, file, Enum.filter(deps, fn d -> d != parent end))
+                false -> acc
+              end
+          end
+      end
+    end)
+    |> Enum.reduce(%{}, fn {file, deps}, acc ->
+      case deps do
+        [] -> acc
+        _ -> Map.put(acc, file, Enum.uniq(deps))
+      end
+    end)
   end
 
   @doc false
-  def synch_watchers(%{dependency_graph: dg, watchers: watchers} = data) do
-    unique_watch_paths =
-      dg
-      |> Enum.reduce([], fn {k, v}, acc -> [k, v | acc] end)
-      |> Enum.map(fn full_path -> Path.dirname(full_path) end)
+  def watch_list(%{dependency_graph: dg} = _data) do
+    Enum.reduce(dg, [], fn {k, deps}, acc ->
+      Enum.reduce(deps, [Path.dirname(k) | acc], fn dep, acc_i ->
+        [Path.dirname(dep) | acc_i]
+      end)
+    end)
+    |> Enum.uniq()
+  end
+
+  @doc false
+  def synch_watchers(paths, watchers) do
+    Enum.reduce(watchers, %{}, fn {k, v}, acc ->
+      case Map.get(acc, k) do
+        nil ->
+          case is_pid(k) do
+            true ->
+              case v in paths do
+                true ->
+                  acc
+                  |> Map.put(k, v)
+                  |> Map.put(v, k)
+
+                _ ->
+                  Process.exit(k, :normal)
+                  acc
+              end
+
+            false ->
+              case k in paths do
+                true ->
+                  acc
+                  |> Map.put(k, v)
+                  |> Map.put(v, k)
+
+                false ->
+                  Process.exit(v, :normal)
+                  acc
+              end
+          end
+
+        _ ->
+          acc
+      end
+    end)
+  end
+
+  @doc false
+  def maybe_start_watchers(paths, %{dependency_graph: dg, watchers: watchers} = data) do
+    dg_paths =
+      Enum.reduce(dg, [], fn {k, _}, acc ->
+        [Path.dirname(k) | acc]
+      end)
       |> Enum.uniq()
 
     new_watchers =
-      Enum.reduce(unique_watch_paths, watchers, fn path, acc ->
-        case File.exists?(path) do
-          true ->
-            case Map.get(acc, path) do
-              nil ->
-                {:ok, pid} = FileSystem.start_link(dirs: [path])
-                FileSystem.subscribe(pid)
+      Enum.reduce(paths, watchers, fn path, acc ->
+        case Map.get(watchers, path) do
+          pid when is_pid(pid) ->
+            acc
 
+          nil ->
+            case path in dg_paths do
+              false ->
                 acc
-                |> Map.put(path, pid)
-                |> Map.put(pid, path)
 
               _ ->
-                acc
-            end
+                case File.exists?(path) do
+                  false ->
+                    Logger.error("CSSEx Watcher: #{path} doesn't exist, retrying in 3secs")
+                    Process.send_after(self(), {:retry_watchers, [path]}, 3000)
+                    acc
 
-          false ->
-            Logger.error("CSSEx Watcher: #{path} doesn't exist, retrying in 2secs")
-            Process.send_after(self(), :retry_watchers, 2000)
-            acc
+                  true ->
+                    {:ok, pid} = FileSystem.start_link(dirs: [path])
+                    FileSystem.subscribe(pid)
+
+                    acc
+                    |> Map.put(path, pid)
+                    |> Map.put(pid, path)
+                end
+            end
         end
       end)
 
@@ -360,9 +453,10 @@ defmodule CSSEx do
 
   @doc false
   def parse_file(path, final_file, self_pid) do
-    result = CSSEx.Parser.parse_file(nil, Path.dirname(path), Path.basename(path), final_file)
-
-    send(self_pid, {:parsed, result})
+    case CSSEx.Parser.parse_file(nil, Path.dirname(path), Path.basename(path), final_file) do
+      {:ok, parser, _} -> send(self_pid, {:parsed, parser})
+      {:error, parser} -> send(self_pid, {:parsed, {path, parser}})
+    end
   end
 
   @doc false
@@ -371,6 +465,7 @@ defmodule CSSEx do
   def assemble_path(<<"/", _::binary>> = path, _cwd), do: Path.expand(path)
 
   # but here yes, because files through plain "imports" in css/cssex might refer to relative paths, such as those in node_modules but also others using relative paths to indicate their source
-  def assemble_path(path, cwd),
-    do: Path.join([cwd, path]) |> Path.expand()
+  def assemble_path(path, cwd) do
+    Path.join([cwd, path]) |> Path.expand()
+  end
 end

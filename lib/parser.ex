@@ -4,7 +4,7 @@ defmodule CSSEx.Parser do
   """
 
   import CSSEx.Helpers.Shared,
-    only: [inc_col: 1, inc_col: 2, inc_line: 1, remove_last_from_chain: 1]
+    only: [inc_col: 1, inc_col: 2, inc_line: 1, remove_last_from_chain: 1, inc_no_count: 2]
 
   import CSSEx.Helpers.Interpolations, only: [maybe_replace_val: 2]
   import CSSEx.Helpers.Error, only: [error_msg: 1]
@@ -34,6 +34,7 @@ defmodule CSSEx.Parser do
     :error,
     :answer_to,
     :to_file,
+    no_count: 0,
     current_reg: [],
     base_path: nil,
     file: nil,
@@ -91,13 +92,25 @@ defmodule CSSEx.Parser do
   You can also pass a file path as the last argument and instead of returning the final binary on the `:ok` tuple it will write the css directly into that file path and return an empty list instead of the final binary
   """
   @spec parse_file(path :: String.t(), file_path :: String.t()) ::
-          {:ok, %CSSEx.Parser{}, String.t()} | {:error, String.t(), valid?: false}
+          {:ok, %CSSEx.Parser{}, String.t()}
+          | {:error, %CSSEx.Parser{error: String.t(), valid?: false}}
   def parse_file(base_path, file_path),
     do: parse_file(nil, base_path, file_path, nil)
 
+  @spec parse_file(%CSSEx.Parser{} | String.t(), String.t(), String.t()) ::
+          {:ok, %CSSEx.Parser{}, String.t() | []}
+          | {:error, %CSSEx.Parser{error: String.t(), valid?: false}}
   def parse_file(%CSSEx.Parser{} = data, base_path, file_path),
     do: parse_file(data, base_path, file_path, nil)
 
+  @spec parse_file(
+          %CSSEx.Parser{} | nil,
+          path :: String.t(),
+          file_path :: String.t(),
+          output_path :: String.t() | nil
+        ) ::
+          {:ok, %CSSEx.Parser{}, String.t() | []}
+          | {:error, %CSSEx.Parser{error: String.t(), valid?: false}}
   def parse_file(base_path, file_path, parse_to_file),
     do: parse_file(nil, base_path, file_path, parse_to_file)
 
@@ -246,6 +259,10 @@ defmodule CSSEx.Parser do
          ]}
     end
   end
+
+  # handle no_count null byte
+  def handle_event(:internal, {:parse, [?$, 0, ?$, 0, ?$ | rem]}, _state, data),
+    do: {:keep_state, inc_no_count(data, -1), [{:next_event, :internal, {:parse, rem}}]}
 
   # handle comments
   ['//', '/*']
@@ -969,7 +986,7 @@ defmodule CSSEx.Parser do
       |> String.replace(~r/\"?/, "")
       |> String.trim()
 
-    inner_data = create_data_for_inner(data, ets)
+    inner_data = create_data_for_inner(%{data | line: 0, column: 0}, ets)
 
     case __MODULE__.parse_file(inner_data, base_path, file_path) do
       {:finished, %{file: file} = new_inner_data} ->
@@ -1514,7 +1531,8 @@ defmodule CSSEx.Parser do
           media_parent: media_parent,
           source_pid: source_pid,
           order_map: order_map,
-          keyframes_order_map: keyframe_order_map
+          keyframes_order_map: keyframe_order_map,
+          no_count: no_count
         } = data,
         ets \\ nil,
         prefix \\ nil
@@ -1537,6 +1555,7 @@ defmodule CSSEx.Parser do
       ets: inner_ets,
       line: line,
       column: col,
+      no_count: no_count,
       level: level + 1,
       prefix: inner_prefix,
       ets_fontface: etsff,

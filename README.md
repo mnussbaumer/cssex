@@ -21,7 +21,7 @@ Its main purpose is to provide a native Elixir pre-processor for CSS, in the vei
 ### Syntax:
 
 <ul>
-  <li><a href="#selectors">Selectors</a><li>  
+  <li><a href="#selectors">Selectors</a></li>
   <li><a href="#variables">Variables</a></li>
   <li><a href="#assigns">Assigns</a></li>
   <li><a href="#functions">Functions</a></li>
