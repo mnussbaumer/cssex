@@ -6,12 +6,30 @@ defmodule CSSEx.Helpers.Shared do
   @line_terminators CSSEx.Helpers.LineTerminators.code_points()
 
   # increment the column token count
-  def inc_col(%{column: column} = data, amount \\ 1),
+  def inc_col(data, amount \\ 1)
+
+  def inc_col(%{column: column, no_count: 0} = data, amount),
     do: %{data | column: column + amount}
 
+  def inc_col(data, _), do: data
+
   # increment the line and reset the column
-  def inc_line(%{line: line} = data, amount \\ 1),
+  def inc_line(data, amount \\ 1)
+
+  def inc_line(%{line: line, no_count: 0} = data, amount),
     do: %{data | column: 0, line: line + amount}
+
+  def inc_line(data, _), do: data
+
+  def inc_no_count(%{no_count: no_count} = data, amount \\ 1) do
+    new_count =
+      case no_count + amount do
+        n when n >= 0 -> n
+        _ -> 0
+      end
+
+    %{data | no_count: new_count}
+  end
 
   def generate_prefix(%{current_chain: cc, prefix: nil}), do: cc
   def generate_prefix(%{current_chain: cc, prefix: prefix}), do: prefix ++ cc

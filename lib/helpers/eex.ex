@@ -9,7 +9,7 @@ defmodule CSSEx.Helpers.EEX do
       inc_col: 2,
       inc_line: 1,
       inc_line: 2,
-      calc_line_offset: 2,
+      inc_no_count: 1,
       file_and_line_opts: 1
     ]
 
@@ -17,27 +17,30 @@ defmodule CSSEx.Helpers.EEX do
   @line_terminators CSSEx.Helpers.LineTerminators.code_points()
   @white_space CSSEx.Helpers.WhiteSpace.code_points()
 
-  defstruct line: 0, column: 0, level: 0, acc: ""
+  defstruct line: 0, column: 0, level: 0, acc: "", no_count: 0
 
   def parse(rem, data) do
-    new_data = open_current(data, :eex)
-
-    case do_parse(rem, new_data, %__MODULE__{}) do
+    case do_parse(rem, open_current(data, :eex), %__MODULE__{}) do
       {:ok, {_, _} = result} -> result
       {:error, _new_data} = error -> error
     end
   end
 
-  def finish(rem, %{line: line} = data, %{acc: eex_block, line: s_line}) do
+  def finish(rem, data, %{acc: eex_block, line: s_line}) do
     acc = IO.chardata_to_string(eex_block)
     final = eval_with_bindings(acc, data)
-    line_correction = calc_line_offset(s_line, final)
-
-    new_final = :lists.flatten([to_charlist(final) | rem])
+    new_final = :lists.flatten([to_charlist(final), ?$, 0, ?$, 0, ?$ | rem])
     :erlang.garbage_collect()
-    {:ok, {new_final, %{close_current(data) | line: line + line_correction}}}
+
+    new_data =
+      data
+      |> inc_line(s_line)
+      |> inc_no_count()
+      |> close_current()
+
+    {:ok, {new_final, new_data}}
   rescue
-    error -> {:error, add_error(data, error_msg({:eex, error}))}
+    error -> {:error, add_error(%{data | line: s_line}, error_msg({:eex, error}))}
   end
 
   def do_parse([], data, %{column: col, line: line}) do
@@ -122,7 +125,12 @@ defmodule CSSEx.Helpers.EEX do
     do: %{state | level: level + amount}
 
   def eval_with_bindings(acc, data),
-    do: EEx.eval_string(acc, [assigns: build_bindings(data)], file_and_line_opts(data))
+    do:
+      EEx.eval_string(
+        acc,
+        [assigns: build_bindings(data)],
+        file_and_line_opts(data)
+      )
 
   def build_bindings(%{assigns: a, local_assigns: la}),
     do:

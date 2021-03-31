@@ -4,11 +4,9 @@ defmodule CSSEx.Helpers.Function do
   import CSSEx.Helpers.Shared,
     only: [
       inc_col: 1,
-      inc_col: 2,
       inc_line: 1,
-      inc_line: 2,
-      calc_line_offset: 2,
-      file_and_line_opts: 1
+      file_and_line_opts: 1,
+      inc_no_count: 1
     ]
 
   import CSSEx.Parser, only: [add_error: 2]
@@ -38,12 +36,8 @@ defmodule CSSEx.Helpers.Function do
 
       {fun_result, _} = Code.eval_string(full_string, [], file_and_line_opts(data))
 
-      line_correction = calc_line_offset(1, fun_string)
-
       new_data =
         data
-        |> inc_col(2)
-        |> inc_line(line_correction)
         |> add_fun(name, fun_result)
 
       {:ok, {new_data, rem}}
@@ -180,15 +174,12 @@ defmodule CSSEx.Helpers.Function do
   end
 
   def finish_call(data, rem, result) when is_binary(result) do
-    line_correction = calc_line_offset(0, result)
-
     data
-    |> inc_line(line_correction)
     |> finish_call(rem, to_charlist(result))
   end
 
   def finish_call(data, rem, result) when is_list(result) do
-    {:ok, {data, :lists.flatten([result | rem])}}
+    {:ok, {inc_no_count(data), :lists.flatten([result, ?$, 0, ?$, 0, ?$ | rem])}}
   end
 
   def finish_error(data, error),

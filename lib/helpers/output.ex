@@ -3,7 +3,7 @@ defmodule CSSEx.Helpers.Output do
 
   @enforce_keys [:data]
   @temp_ext "-cssex.temp"
-  defstruct [:data, :to_file, :file_path, valid?: true, acc: []]
+  defstruct [:data, :to_file, :temp_file, :file_path, valid?: true, acc: []]
 
   def do_finish(%{to_file: nil} = data) do
     %__MODULE__{data: data}
@@ -11,11 +11,18 @@ defmodule CSSEx.Helpers.Output do
   end
 
   def do_finish(%{to_file: to_file} = data) do
-    base = %__MODULE__{data: data, file_path: to_file}
+    random_string =
+      Enum.shuffle(1..255)
+      |> Enum.take(12)
+      |> to_string
+      |> Base.encode16(padding: false)
+
+    temp_file = "#{to_file}#{random_string}#{@temp_ext}"
+    base = %__MODULE__{data: data, file_path: to_file, temp_file: temp_file}
 
     case File.mkdir_p(Path.dirname(to_file)) do
       :ok ->
-        case File.open("#{to_file}#{@temp_ext}", [:write, :raw]) do
+        case File.open(temp_file, [:write, :raw]) do
           {:ok, io_device} ->
             %__MODULE__{base | to_file: io_device}
             |> finish()
@@ -263,19 +270,21 @@ defmodule CSSEx.Helpers.Output do
         %__MODULE__{
           to_file: to_file,
           valid?: true,
-          file_path: file_path
+          file_path: file_path,
+          temp_file: temp_file
         } = ctx
       ) do
     case IO.binwrite(to_file, "\n") do
       :ok ->
         case File.close(to_file) do
           :ok ->
-            case File.cp("#{file_path}#{@temp_ext}", file_path) do
+            case File.cp(temp_file, file_path) do
               :ok ->
-                spawn(fn -> File.rm("#{file_path}#{@temp_ext}") end)
+                spawn(fn -> File.rm(temp_file) end)
                 ctx
 
               error ->
+                spawn(fn -> File.rm(temp_file) end)
                 add_error(ctx, error)
             end
 
@@ -361,7 +370,9 @@ defmodule CSSEx.Helpers.Output do
     )
   end
 
-  def add_error(%__MODULE__{data: data} = ctx, error) do
+  def add_error(%__MODULE__{data: data} = ctx, error, optional \\ nil) do
+    if(optional, do: IO.inspect(optional))
+
     %__MODULE__{
       ctx
       | valid?: false,
