@@ -25,6 +25,7 @@ Its main purpose is to provide a native Elixir pre-processor for CSS, in the vei
   <li><a href="#variables">Variables</a></li>
   <li><a href="#assigns">Assigns</a></li>
   <li><a href="#functions">Functions</a></li>
+  <li><a href="#implemented_functions">Implemented Functions</a></li>
   <li><a href="#eex">EEx Blocks</a></li>
   <li><a href="#comments">Comments</a></li>
   <li><a href="#reserved">Reserved Tokens</a></li>
@@ -419,6 +420,24 @@ Results in:
 
 Functions declared in a stylesheet (even `@included` children!) become available from then on. Further declarations of the same function name will override the previous one from then on.
 
+<div id="implemented_functions"></>
+
+#### Implemented Functions
+
+There's 3 basic functions that ship with CSSEx and that you can use:
+
+- `@fn::lighten(color_to_lighten, percentage)`
+Use as `@fn::lighten(blue, 10)`
+
+- `@fn::darken(color_to_darken, percentage)`
+Use as `@fn::darken(blue, 10)`
+
+- `@fn::opacity(color, 0_to_1)`
+Use as `@fn::lighten(blue, 0.2)`
+
+Notice they don't take units, and opacity needs a well formed float, e.g. 0.4.
+
+
 <div id="eex"></>
 
 #### EEx blocks
@@ -567,7 +586,7 @@ To install from github use:
 
 defp deps do
      [
-        {:deployer, git: "https://github.com/mnussbaumer/cssex.git", only: [:dev], runtime: false}
+        {:cssex, git: "https://github.com/mnussbaumer/cssex.git"}
      ]
 end
 ```
@@ -575,16 +594,6 @@ end
 <div id="usage"></div>
 
 ## Usage
-
-To use it, add to your `dev.exs` configuration file:
-
-```elixir
-
-config :yourapp_web, CSSEx,
-  entry_points: [{"priv/static/cssex/base.cssex", "priv/static/css/base.css"}]
-```
-
-##### Note
 
 If you want to use other folder than priv you need to use an expandable path, e.g. the phoenix assets folder, you can do it by using, for instance in this case for an umbrella with a phoenix app:
 
@@ -599,26 +608,34 @@ config :yourapp_web, CSSEx,
   ]
 ```
 
-Webpack can then use `app.css` as regularly.
+This is usually the case if you want to integrate with Webpack, this will output the resulting css file and your webpack can just then use `app.css` as regularly.
 You can specify as many entry points as wanted.
+
+If you are using the priv folder you can simply use it as:
+
+```elixir
+
+config :yourapp_web, CSSEx,
+  entry_points: [{"priv/static/cssex/base.cssex", "priv/static/css/base.css"}]
+```
+
 
 #### Adding the file watcher to your application supervision tree.
 
-Finally add to your `yourapp_web` application file:
+Finally add to your `yourapp_web` application file (marked with `# add this`):
 
 ```elixir
 defmodule YourAppWeb.Application do
+   @moduledoc false
+   @env Mix.env() # add this
 
-   # ... other code
+   use Application
 
    def start(_type, _args) do
     children = [
       YourAppWeb.Telemetry,
-      YourAppWeb.Endpoint,
-      Supervisor.child_spec(%{id: CSSEx, start: {CSSEx, :start_link, [cssex_config()]}},
-        type: :worker
-      ) ## add this line
-    ]
+      YourAppWeb.Endpoint
+    ] |> maybe_add_cssex() # add this
 
     opts = [strategy: :one_for_one, name: YourAppWeb.Supervisor]
     Supervisor.start_link(children, opts)
@@ -627,6 +644,21 @@ defmodule YourAppWeb.Application do
   # ... other code
 
   # add this
+  def maybe_add_cssex(children) do
+    case @env do
+      :prod ->
+        children
+
+      _ ->
+        children ++
+          [
+            Supervisor.child_spec(%{id: CSSEx, start: {CSSEx, :start_link, [cssex_config()]}},
+              type: :worker
+            )
+          ]
+    end
+  end
+
   def cssex_config() do
     Application.get_env(:yourapp_web, CSSEx)
     |> CSSEx.make_config(Application.app_dir(:yourapp_web))
@@ -635,9 +667,21 @@ end
 ```
 
 This will define an entry point file of `priv/static/cssex/base.cssex` which will output its parsed content into `priv/static/css/base.css`.
-In this case you'll need to create the folder and cssex file as well. It will log errors if the file doesn't exist. If the folder doesn't exist you'll need to restart your app for it to pick up.
+In this case you'll need to create the folder and cssex file as well. It will log errors if the file doesn't exist.
 
 Now whenever you change something in the entry point or any of the files it depends on (`@include`) it will automatically recompile.
+
+The reason we use `@env Mix.env()` is so that we don't actually add CSSEx as an application to start when running in production.
+
+#### Production assets
+If you wish to process and generate the files during assembling of a release add a simple mix task to your build script:
+
+`mix cssex.parser --c yourapp_web`
+
+Place this before the `npm run deploy` or any script you use to bundle your js/css and/or before `mix phx.digest`.
+
+
+And this will use the same environment.
 
 <div id="tasks"></div>
 
