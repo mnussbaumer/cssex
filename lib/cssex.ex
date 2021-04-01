@@ -208,7 +208,7 @@ defmodule CSSEx do
       }) do
     events =
       Enum.reduce(eps, [], fn {entry, _}, acc ->
-        deps = Map.get(dependency_graph, entry)
+        deps = Map.get(dependency_graph, entry, [])
 
         case file_path in deps || file_path == entry do
           true -> [{{:timeout, {:to_process, entry}}, 50, nil} | acc]
