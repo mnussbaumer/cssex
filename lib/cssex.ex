@@ -5,17 +5,15 @@ defmodule CSSEx do
 
   @timeout 15_000
 
-  defstruct [
-    :entry_points,
-    pretty_print: false,
-    file_watch: false,
-    watchers: %{},
-    no_start: false,
-    dependency_graph: %{},
-    monitors: %{},
-    reply_to: [],
-    reprocess: []
-  ]
+  defstruct entry_points: [],
+            pretty_print: false,
+            file_watch: false,
+            watchers: %{},
+            no_start: false,
+            dependency_graph: %{},
+            monitors: %{},
+            reply_to: [],
+            reprocess: []
 
   @type t :: %__MODULE__{
           entry_points: list(Keyword.t()),
