@@ -16,10 +16,12 @@ defmodule Cssex.MixProject do
         extras: ["README.md"]
       ],
       description: "A CSS preprocessor written in Elixir",
-      licenses: ["MIT"],
-      links: %{
-        "github/readme" => "https://github.com/mnussbaumer/cssex"
-      }
+      package: [
+        licenses: ["MIT"],
+        links: %{
+          "github/readme" => "https://github.com/mnussbaumer/cssex"
+        }
+      ]
     ]
   end
 
