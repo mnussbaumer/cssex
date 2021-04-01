@@ -36,7 +36,7 @@ defmodule CSSEx.Function.Test do
     assert {
              :ok,
              _,
-             "div{color:hsla(0,100%,60%,1.0)}\n"
+             "div{color:rgba(255,51,51,1.0)}\n"
            } =
              Parser.parse("""
              $!test @fn::lighten(red, 10);
@@ -48,7 +48,7 @@ defmodule CSSEx.Function.Test do
     assert {
              :ok,
              _,
-             "div{color:hsla(0,100%,40%,1.0)}\n"
+             "div{color:rgba(204,0,0,1.0)}\n"
            } =
              Parser.parse("""
              $!test @fn::darken(red, 10);

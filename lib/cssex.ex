@@ -1,4 +1,13 @@
 defmodule CSSEx do
+  @moduledoc """
+  CSSEx is a CSS pre-processor inspired by SASS/SCSS. A complete description of what
+  it can do can be found in the project's README.md [hex](https://hexdocs.pm/cssex/readme.html) / [github](https://github.com/mnussbaumer/cssex) file.
+
+  This module is the file watcher responsible for automatically processing your CSSEx
+  files into proper CSS files.
+  Refer to the [usage](https://hexdocs.pm/cssex/readme.html#usage) section for details.
+  """
+
   @behaviour :gen_statem
 
   require Logger

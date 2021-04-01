@@ -1,8 +1,12 @@
 defmodule CSSEx.RGBA do
-  defstruct r: 0, g: 0, b: 0, a: 1
+  @moduledoc """
+  Struct and helper functions for generating RGBA values.
+  """
 
   @colors CSSEx.Helpers.Colors.colors_tuples()
   alias CSSEx.Unit
+
+  defstruct r: 0, g: 0, b: 0, a: 1
 
   @type t() :: %CSSEx.RGBA{
           r: non_neg_integer,
