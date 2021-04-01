@@ -4,7 +4,7 @@ A small pre-processing extension language for CSS written in Elixir.
 Its main purpose is to provide a native Elixir pre-processor for CSS, in the vein of Sass/Scss.
 
 <div align="center">
-     <a href="#syntax">syntax</a><span>&nbsp; |</span>
+     <a href="#syntax">Syntax</a><span>&nbsp; |</span>
      <a href="#caveats">Caveats</a><span>&nbsp; |</span>
      <a href="#installation">Installation</a><span>&nbsp; |</span>
      <a href="#usage">Usage</a><span>&nbsp; |</span>
@@ -695,7 +695,7 @@ And this will use the same environment.
 
 Besides the automatic file watcher for development purposes it's also included a task for processing cssex files into css files.
 
-You can read [cssex.parser task](lib/mix/tasks/css.parser.ex) for other details.
+You can read [cssex.parser task](https://github.com/mnussbaumer/cssex/lib/mix/tasks/css.parser.ex) for other details.
 The base syntax is:
 
 ```
@@ -726,7 +726,7 @@ Other than that check the parser.ex to see how you can start an individual parse
 
 ## About
 
-![Cocktail Logo](logo/cocktail_logo.png?raw=true "Cocktail Logo")
+![Cocktail Logo](https://github.com/mnussbaumer/cssex/logo/cocktail_logo.png?raw=true "Cocktail Logo")
 
 [© rooster image in the cocktail logo](https://commons.wikimedia.org/wiki/User:LadyofHats)
 

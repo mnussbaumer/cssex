@@ -1,6 +1,18 @@
 defmodule CSSEx.Helpers.Functions do
-  @moduledoc false
+  @moduledoc """
+  Default base functions to use in stylesheets.
 
+  ```
+  @fn::opacity(red, 0.8)
+  ```
+  """
+
+  @doc """
+  Lighten function, takes a color in the form of a string and a number representing
+  the percentage to lighten and returns a CSS rgba() string.
+
+  @fn::lighten(orange, 10)
+  """
   def lighten(_ctx_content, color, percentage) do
     {
       :ok,
@@ -17,9 +29,17 @@ defmodule CSSEx.Helpers.Functions do
       end
 
     %CSSEx.HSLA{hsla | l: %CSSEx.Unit{l_unit | value: new_l}}
+    |> CSSEx.RGBA.from_hsla()
+    |> elem(1)
     |> to_string
   end
 
+  @doc """
+  Darken function, takes a color in the form of a string and a number representing
+  the percentage to darken and returns a CSS rgba() string.
+
+  @fn::darken(orange, 25)
+  """
   def darken(_ctx_content, color, percentage) do
     {
       :ok,
@@ -36,9 +56,18 @@ defmodule CSSEx.Helpers.Functions do
       end
 
     %CSSEx.HSLA{hsla | l: %CSSEx.Unit{l_unit | value: new_l}}
+    |> CSSEx.RGBA.from_hsla()
+    |> elem(1)
     |> to_string
   end
 
+  @doc """
+  Opacity function, takes a color in the form of a string and a number representing
+  the desired alpha channel value in the form of a float and returns a CSS rgba()
+  string.
+
+  @fn::opacity(orange, 0.5)
+  """
   def opacity(_ctx_content, color, alpha) do
     {:ok, %CSSEx.RGBA{} = rgba} = CSSEx.RGBA.new_rgba(color)
 
