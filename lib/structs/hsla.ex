@@ -175,7 +175,7 @@ defmodule CSSEx.HSLA do
 
   @doc false
   def valid_hue_val(n) when n <= 360 and n >= 0, do: %Unit{value: n, unit: nil}
-  def valid_hue_val(n), do: %Unit{value: 0, unit: nil}
+  def valid_hue_val(_n), do: %Unit{value: 0, unit: nil}
 
   @doc false
   def valid_saturation_val(n) when n <= 100 and n >= 0, do: %Unit{value: n, unit: "%"}

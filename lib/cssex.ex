@@ -5,17 +5,15 @@ defmodule CSSEx do
 
   @timeout 15_000
 
-  defstruct [
-    :entry_points,
-    pretty_print: false,
-    file_watch: false,
-    watchers: %{},
-    no_start: false,
-    dependency_graph: %{},
-    monitors: %{},
-    reply_to: [],
-    reprocess: []
-  ]
+  defstruct entry_points: [],
+            pretty_print: false,
+            file_watch: false,
+            watchers: %{},
+            no_start: false,
+            dependency_graph: %{},
+            monitors: %{},
+            reply_to: [],
+            reprocess: []
 
   @type t :: %__MODULE__{
           entry_points: list(Keyword.t()),
@@ -210,7 +208,7 @@ defmodule CSSEx do
       }) do
     events =
       Enum.reduce(eps, [], fn {entry, _}, acc ->
-        deps = Map.get(dependency_graph, entry)
+        deps = Map.get(dependency_graph, entry, [])
 
         case file_path in deps || file_path == entry do
           true -> [{{:timeout, {:to_process, entry}}, 50, nil} | acc]

@@ -46,11 +46,15 @@ defmodule CSSEx.RGBA do
 
   def new_rgba(<<"hsla", _::binary>> = full) do
     case CSSEx.HSLA.new_hsla(full) do
-      %CSSEx.HSLA{} = hsla ->
-        :ok
+      {:ok, %CSSEx.HSLA{} = hsla} -> from_hsla(hsla)
+      error -> error
+    end
+  end
 
-      _ ->
-        {:error, :invalid}
+  def new_rgba(<<"hsl", _::binary>> = full) do
+    case CSSEx.HSLA.new_hsla(full) do
+      {:ok, %CSSEx.HSLA{} = hsla} -> from_hsla(hsla)
+      error -> error
     end
   end
 
