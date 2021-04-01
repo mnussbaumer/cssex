@@ -586,12 +586,10 @@ To install from github use:
 
 defp deps do
      [
-        {:cssex, git: "https://github.com/mnussbaumer/cssex.git", only: [:dev], runtime: false}
+        {:cssex, git: "https://github.com/mnussbaumer/cssex.git"}
      ]
 end
 ```
-
-If you need to use it during tests, or production change the declaration to reflect that. Most of the use cases though is for development alone, and building the assets before assembling a release.
 
 <div id="usage"></div>
 
