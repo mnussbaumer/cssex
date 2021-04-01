@@ -578,15 +578,21 @@ The final output always follows this format:
 
 ## Installation
 
-This is an early and still incomplete release of this library, as of now it's not available in [hex.pm](https://hex.pm), it will be once the remaining baseline functionality is added ([roadmap](#roadmap)).
+This is an early release of this library, it's available in [hex.pm](https://hex.pm).
+Its initial release in a smaller version than 1.0 is just meant to signal that there might be some little details (line/col information on errors, etc) that might not be 100% accurate although there aren't intended breaking changes in the roadmap.
 
-To install from github use:
+It's fully functioning, has a relevant test suite and has been used to generate a smallish CSS framework that you can see in [simples](lib/test/files/includes/simples/simples.cssex) without problems. It has been tested as a standalone, in umbrellas and with webpack, on Linux Ubuntu 20.04 LTS, using `inotify-tools` as the file watcher, it should work with any other setup.
+
+The only dependency is on `file_system` for the file watcher.
+It's been used while developing and the tasks have been tested for deployment on [render.com](https://render.com) as part of the build script when assembling a release.
+
+To install from `hex.pm` use:
 
 ```elixir
 
 defp deps do
      [
-        {:cssex, git: "https://github.com/mnussbaumer/cssex.git"}
+        {:cssex, "~> 0.6"}
      ]
 end
 ```
@@ -611,7 +617,7 @@ config :yourapp_web, CSSEx,
 This is usually the case if you want to integrate with Webpack, this will output the resulting css file and your webpack can just then use `app.css` as regularly.
 You can specify as many entry points as wanted.
 
-If you are using the priv folder you can simply use it as:
+If you are using the priv folder directly you can simply use it as:
 
 ```elixir
 

@@ -5,7 +5,7 @@ defmodule Cssex.MixProject do
     [
       app: :cssex,
       version: "0.6.0",
-      elixir: "~> 1.11",
+      elixir: "~> 1.9",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       name: "CSSEx",
@@ -14,7 +14,12 @@ defmodule Cssex.MixProject do
       docs: [
         main: "CSSEx",
         extras: ["README.md"]
-      ]
+      ],
+      description: "A CSS preprocessor written in Elixir",
+      licenses: ["MIT"],
+      links: %{
+        "github/readme" => "https://github.com/mnussbaumer/cssex"
+      }
     ]
   end
 
