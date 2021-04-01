@@ -232,7 +232,7 @@ Child files (the one's `@include`d) can override the parent's variable value (af
 You can otherwise limit this by declaring them with:
 `$()` which scopes the variable locally so they do not become available to the parent afterwards, and you can also conditionally set them with:
 
-`$?` which only sets them for the file if it isn't set in its scope yet. This allows you to create customisable themes, in that you can have a file(s) that specifies all colors, sizes and others, and then make the theme "components", set their needed values with `$()` which will populate those for the scope only if they haven't been declared previously.
+`$?` which only sets them for the file if it isn't set in its scope yet. This allows you to create customisable themes, in that you can have a file(s) that specifies all colors, sizes and others, and then make the theme "components", set their needed values with `$?` which will populate those for the scope only if they haven't been declared previously, or override them in an included stylesheet with `$()`
 
 You can also declare a variable with `$*!`, that does all the same but sets as well a CSS variable on the root element, with the same name as the variable declared, prefixed with `--`.
 
@@ -670,7 +670,6 @@ Other than that check the parser.ex to see how you can start an individual parse
 
 ## Roadmap
 
-- Fix error reporting and include file on error output, duh!
 - Additional functionality related with dynamic generation and visualisation of CSS in a structured format. This is mostly for use cases outside of pure pre-processing and more to do with tree-shaking, automatic vendor-prefixing, searchable CSS definitions, etc.
 
 <div id="about"></div>
