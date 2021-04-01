@@ -726,7 +726,7 @@ Other than that check the parser.ex to see how you can start an individual parse
 
 ## About
 
-![Cocktail Logo](https://github.com/mnussbaumer/cssex/logo/cocktail_logo.png?raw=true "Cocktail Logo")
+![Cocktail Logo](https://github.com/mnussbaumer/cssex/blob/master/logo/cocktail_logo.png?raw=true "Cocktail Logo")
 
 [© rooster image in the cocktail logo](https://commons.wikimedia.org/wiki/User:LadyofHats)
 
