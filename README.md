@@ -718,6 +718,8 @@ $()
 $*()
 $::
 @include
+@expandable
+@apply
 @fn
 <% ....
 <$ ....
@@ -743,10 +745,10 @@ And `../shared/samples.cssex`:
 
 ```css
 $()tag div
-#{tag} { background-color: white; color: orange; }
+<$tag$> { background-color: white; color: orange; }
 ```
 
-The final output will always have `div` declared first, and duplicate attributes will hold the value according to the declaration order:
+The final output will always have `div` declared first, and duplicate attributes will hold the value according to their declaration order. Since the last evaluated `div` selector set the color to `orange` that's the color that the final stylesheet will hold:
 
 ```css
 div {background-color: white, color: orange }
@@ -761,7 +763,7 @@ div { color: green; }
 div { background-color: white, color: orange }
 ```
 
-This means it can condense the final output. And also that it's ok to `@apply` multiple `@expandable` classes to an element as any repeated attributes are just replaced.
+This means it can condense the final output, and also that it's ok to `@apply` multiple `@expandable` classes to an element as any repeated attributes are just replaced, or define selectors with repeated attributes in different places as they coalesce into a single representations.
 
 If you want multiple declarations to not be merged right now the only possibility is to have different entry points that produce plain css files and use them with regular `@import` rules on a final css. 
 
