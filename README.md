@@ -298,7 +298,7 @@ It has to be terminated with semicolon followed by newline.
 
 #### @expandable & @apply
 
-Expandables allow you to define utility classes that can be used inside any selector to add attributes & or selectors. It allows for then `@apply`ing those blocks in different ways. You can force the `@apply` to be exactly as it was resolved when declared and keep the selector hierarchies there defined in reference to the `@expandable` selector, you can use it to be dynamically evaluated, or to apply it's hierarchies in the new context while using any variable interpolation as it occurred when defining. It might sound confusing but with an example is easier to see
+Expandables allow you to define utility classes that can be used inside any selector to add attributes & or selectors. It allows for then `@apply`ing those blocks in different ways. You can force the `@apply` to be exactly as it was resolved when declared and keep the selector hierarchies there defined in reference to the `@expandable` selector, you can use it to be dynamically evaluated, or to apply its hierarchies in the new context while using any variable interpolation as it occurred when defining. It might sound confusing but with an example is easier to see
 
 ```scss
 $!color red;
@@ -335,23 +335,23 @@ $!color blue;
 ##### into
 
 ```css
-.hoverable{
+.hoverable {
   color:red
 }
 
-.hoverable:hover{
+.hoverable:hover {
   color:rgba(204,0,0,1.0)
 }
 
-container .hoverable{
+container .hoverable {
   background-color:black
 }
 
-.class-1{
+.class-1 {
   color:red
 }
 
-.class-1:hover{
+.class-1:hover {
   color:rgba(204,0,0,1.0)
 }
 
@@ -396,34 +396,34 @@ container .class-4 {
 }
 ```
 
-As you can see, the we had a variable `$!color` declared with the value `red`.
+As you can see, we had a variable `$!color` declared with the value `red`.
 Then we declared an `@expandable` block for the selector `.hoverable`, where we used interpolation for `color`, and had nesting selectors, one of which calling a function again with an interpolated value.
 
 That is the top level declarations that came on top of the stylesheet:
 
 ```css
-.hoverable{
+.hoverable {
   color:red
 }
 
-.hoverable:hover{
+.hoverable:hover {
   color:rgba(204,0,0,1.0)
 }
 
-container .hoverable{
+container .hoverable {
   background-color:black
 }
 ```
-Then we declared a `.class-1` selector and applied the `hoverable` element we declared as `@expandable` before inside it (notice how we don't user the `.` before its name.
+Then we declared a `.class-1` selector and applied the `hoverable` element we declared as `@expandable` before inside it (notice we don't use the `.` before its name).
 
-What this did was apply all the contents of that expandable element inside ours. You can see that the nesting `&` where applied to `.class-1`:
+What this did was apply all the contents of that expandable element inside `.class-1`. You can see that the nesting `&` where applied to `.class-1`:
 
 ```css
-.class-1{
+.class-1 {
   color:red
 }
 
-.class-1:hover{
+.class-1:hover {
   color:rgba(204,0,0,1.0)
 }
 
@@ -465,7 +465,7 @@ container .class-3 {
 }
 ```
 
-Lastly we did the same original non-prefix `@apply` in `.class-4` and in this case, the value of the variables used was the ones set at declaration time, `red`, but the nesting was still applied in terms of the current selector:
+Lastly we did the same original non-prefix `@apply` in `.class-4` and in this case, the value of the variables used were the ones set at declaration time, `red`, but the nesting was still applied in terms of the current selector:
 
 ```css
 .class-4 {
@@ -489,13 +489,13 @@ You can also string together several elements to expand in a single `@apply`, wi
 
 The `@expandable` directives  are placed in order of declaration at the top of the final stylesheet as individual selectors, but you can declare them from any file or part of the file as long as it's not inside a block, they must always be declared on a top level.
 
-The only exception on their placement is when using `@media` selectors inside `@expandable`. In those cases normal rules will go to the top but the media parts will be placed alongside the other media statements
+The only exception on their final placement is when using `@media` selectors inside `@expandable`. In those cases normal rules will go to the top but the media parts will be placed alongside the other media statements.
 
-The `@apply` directive takes a list of white-space separated tokens, where each token refers to a previously declared `@expandable` block. You should not use the `.` of the original to refer to them. You can additionally define their expansion mode with `?` (all elements dynamically evaluated) or `!` (as a static block as evaluated when declared). The default without prefix is a mix of both, variables with the values at the time of declaration and nesting dynamically evaluated inside the context of the block the `@apply` is declared in.
+The `@apply` directive takes a list of white-space separated tokens, where each token refers to a previously declared `@expandable` block. You should not use the `.` of the original class to refer to them. You can additionally define their expansion mode with `?` (all elements dynamically evaluated) or `!` (as a static block as evaluated when declared). The default without prefix is a mix of both, variables with the values at the time of declaration and nesting dynamically evaluated inside the context of the block the `@apply` is declared in.
 
-Keep note that `<$ ... $>` interpolation is the only consistent form of interpolation. If you use, for instance in `@fn::...` call the form `$::color`, this will always be dynamically evaluated. EEx blocks follow the same pattern, if you want them to be the value at declaration you need to use the `!` prefix when `@apply`ing.
+Keep note that `<$ ... $>` interpolation is the only consistent form of interpolation. If you use, for instance in `@fn::...` call the form `$::color`, this will always be dynamically evaluated. EEx blocks follow the same pattern, if you want them to be expanded as they resolved at declaration you need to use the `!` prefix when `@apply`ing.
 
-Note that you can also declare `@media` attributes inside `@expandables` and nest them as well.
+Note that you can also declare `@media` attributes inside `@expandables` and nest them as well. Most times you'll want to use normal applying or `?`.
 
 
 <div id="functions"></>
