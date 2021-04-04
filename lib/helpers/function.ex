@@ -133,6 +133,7 @@ defmodule CSSEx.Helpers.Function do
 
   def finish_parse_call(%{functions: functions} = data, rem, acc) do
     fun_spec = IO.chardata_to_string(acc)
+
     {name, args} = extract_name_and_args(fun_spec, functions)
 
     case replace_args(args, data) do

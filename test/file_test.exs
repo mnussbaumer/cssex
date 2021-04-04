@@ -42,7 +42,7 @@ defmodule CSSEx.File.Test do
     {:ok, %{target_originals: target_originals, non_existing: non_existing_path}}
   end
 
-  @full_final_css ".test_1{background-color:#000000;color:#ffffff}.test_2{background-color:#ffffff;color:#000000}div{color:black;color:white;background-color:red}div:hover{cursor:pointer;background-color:green;color:purple}\n"
+  @full_final_css ".test_1{background-color:#000000;color:#ffffff}.test_2{background-color:#ffffff;color:#000000}div{background-color:red;color:white}div:hover{background-color:green;color:purple;cursor:pointer}\n"
 
   test "parses a file", %{target_originals: base_path} do
     final_path = Path.join([base_path, "test_1.cssex"])

@@ -28,6 +28,7 @@ defmodule CSSEx.Helpers.EEX do
 
   def finish(rem, data, %{acc: eex_block, line: s_line}) do
     acc = IO.chardata_to_string(eex_block)
+
     final = eval_with_bindings(acc, data)
     new_final = :lists.flatten([to_charlist(final), ?$, 0, ?$, 0, ?$ | rem])
     :erlang.garbage_collect()
@@ -40,7 +41,8 @@ defmodule CSSEx.Helpers.EEX do
 
     {:ok, {new_final, new_data}}
   rescue
-    error -> {:error, add_error(%{data | line: s_line}, error_msg({:eex, error}))}
+    error ->
+      {:error, add_error(%{data | line: s_line}, error_msg({:eex, error}))}
   end
 
   def do_parse([], data, %{column: col, line: line}) do

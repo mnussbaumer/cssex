@@ -3,12 +3,14 @@ defmodule CSSEx.Helpers.Error do
 
   # this means that the error is being bubbled up
   def error_msg(%{valid?: false, error: error}), do: error
+  def error_msg({:error, error}), do: error_msg(error)
 
   def error_msg({:mismatched, char}), do: "mismatched #{char}"
 
   def error_msg({:not_declared, :var, val}), do: "variable #{val} was not declared"
   def error_msg({:not_declared, :val, val}), do: "assign #{val} was not declared"
   def error_msg({:not_declared, :function, name}), do: "function #{name} was not declared"
+  def error_msg({:not_declared, :expandable, name}), do: "@expandable #{name} was not declared"
   def error_msg({:unexpected, string}), do: "unexpected token: #{string}"
 
   def error_msg({:eex, error}), do: "parsing EEX tag: #{inspect(error)}"
@@ -43,4 +45,7 @@ defmodule CSSEx.Helpers.Error do
 
   def error_msg({:invalid_declaration, key, val}),
     do: "invalid declaration of css rule where key -> #{key} <- and value -> #{val} <-"
+
+  def error_msg({:invalid_expandable, name}),
+    do: "invalid @expandable selector #{name}"
 end

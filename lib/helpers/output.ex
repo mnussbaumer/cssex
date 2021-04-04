@@ -42,6 +42,7 @@ defmodule CSSEx.Helpers.Output do
     |> maybe_add_imports()
     |> maybe_add_font_faces()
     |> maybe_add_css_variables()
+    |> maybe_add_expandables()
     |> add_general()
     |> maybe_add_media()
     |> maybe_add_keyframes()
@@ -162,6 +163,68 @@ defmodule CSSEx.Helpers.Output do
 
   def take_root(ets), do: :ets.take(ets, [":root"])
 
+  def maybe_add_expandables(
+        %__MODULE__{
+          to_file: nil,
+          acc: acc,
+          data: %CSSEx.Parser{expandables: expandables, expandables_order_map: %{c: c} = eom}
+        } = ctx
+      ) do
+    new_acc =
+      Enum.reduce(0..c, [], fn n, acc_i ->
+        case Map.get(eom, n) do
+          nil ->
+            acc_i
+
+          selector ->
+            {selector_exp, other_selectors, _, _, _} = Map.get(expandables, selector)
+
+            selector_list =
+              case selector_exp do
+                [] -> ""
+                _ -> [selector, "{", selector_exp, "}"]
+              end
+
+            [acc_i | [selector_list | other_selectors]]
+        end
+      end)
+
+    %__MODULE__{ctx | acc: [acc | new_acc]}
+  end
+
+  def maybe_add_expandables(
+        %__MODULE__{
+          to_file: to_file,
+          data: %CSSEx.Parser{expandables: expandables, expandables_order_map: %{c: c} = eom},
+          valid?: true
+        } = ctx
+      ) do
+    Enum.reduce_while(0..c, :ok, fn n, acc ->
+      case Map.get(eom, c) do
+        nil ->
+          {:cont, acc}
+
+        selector ->
+          {selector_exp, other_selectors, _, _, _} = Map.get(expandables, selector)
+
+          selector_list =
+            case selector_exp do
+              [] -> ""
+              _ -> [selector, "{", selector_exp, "}"]
+            end
+
+          case IO.binwrite(to_file, [selector_list, other_selectors]) do
+            :ok -> {:cont, acc}
+            error -> {:halt, error}
+          end
+      end
+    end)
+    |> case do
+      :ok -> ctx
+      error -> add_error(ctx, error)
+    end
+  end
+
   def add_general(
         %__MODULE__{
           to_file: nil,
@@ -241,7 +304,7 @@ defmodule CSSEx.Helpers.Output do
           data: %CSSEx.Parser{ets_keyframes: ets, keyframes_order_map: om}
         } = ctx
       ),
-      do: %__MODULE__{ctx | acc: [acc | fold_attributes_table(ets, om)]}
+      do: %__MODULE__{ctx | acc: [acc | fold_mapped_table(ets, om)]}
 
   def maybe_add_keyframes(
         %__MODULE__{
@@ -250,7 +313,7 @@ defmodule CSSEx.Helpers.Output do
           valid?: true
         } = ctx
       ) do
-    case fold_attributes_table(ets, om, to_file) do
+    case fold_mapped_table(ets, om, to_file) do
       :ok -> ctx
       error -> add_error(ctx, error)
     end
@@ -302,7 +365,7 @@ defmodule CSSEx.Helpers.Output do
   def fold_attributes_table(ets) do
     :ets.foldl(
       fn {selector, attributes}, acc ->
-        [acc, selector, "{", attributes, "}"]
+        [acc, selector, "{", attributes_to_list(attributes), "}"]
       end,
       [],
       ets
@@ -321,7 +384,7 @@ defmodule CSSEx.Helpers.Output do
           acc
 
         [{_, attrs}] ->
-          [acc, selector, "{", attrs, "}"]
+          [acc, selector, "{", attributes_to_list(attrs), "}"]
       end
     end)
   end
@@ -339,7 +402,60 @@ defmodule CSSEx.Helpers.Output do
             :ok
 
           [{_, attrs}] ->
-            case IO.binwrite(to_file, [selector, "{", attrs, "}"]) do
+            case IO.binwrite(to_file, [selector, "{", attributes_to_list(attrs), "}"]) do
+              :ok -> :ok
+              error -> error
+            end
+        end
+    end)
+  end
+
+  def fold_mapped_table(ets, %{c: c} = om) do
+    Enum.reduce(0..c, [], fn n, acc ->
+      selector = Map.get(om, n)
+
+      case :ets.lookup(ets, selector) do
+        [] ->
+          acc
+
+        [{_, maps}] ->
+          [
+            acc
+            | [
+                selector,
+                "{",
+                Enum.reduce(maps, [], fn {prop, attrs}, acc_1 ->
+                  [acc_1, prop, "{", attributes_to_list(attrs), "}"]
+                end),
+                "}"
+              ]
+          ]
+      end
+    end)
+  end
+
+  def fold_mapped_table(ets, %{c: c} = om, to_file) do
+    Enum.reduce(0..c, :ok, fn
+      n, :ok ->
+        selector = Map.get(om, n)
+
+        case :ets.lookup(ets, selector) do
+          [] ->
+            :ok
+
+          [{_, maps}] ->
+            IO.binwrite(
+              to_file,
+              [
+                selector,
+                "{",
+                Enum.reduce(maps, [], fn {prop, attrs}, acc_1 ->
+                  [acc_1, prop, "{", attributes_to_list(attrs), "}"]
+                end),
+                "}"
+              ]
+            )
+            |> case do
               :ok -> :ok
               error -> error
             end
@@ -350,7 +466,7 @@ defmodule CSSEx.Helpers.Output do
   def fold_font_faces_table(ets) do
     :ets.foldl(
       fn {_, attributes}, acc ->
-        [acc, "@font-face{", attributes, "}"]
+        [acc, "@font-face{", attributes_to_list(attributes), "}"]
       end,
       [],
       ets
@@ -360,9 +476,15 @@ defmodule CSSEx.Helpers.Output do
   def fold_font_faces_table(ets, to_file) do
     :ets.foldl(
       fn {_, attributes}, acc ->
-        case acc == :ok && IO.binwrite(to_file, ["@font-face{", attributes, "}"]) do
-          :ok -> :ok
-          error -> error
+        case acc == :ok do
+          true ->
+            case IO.binwrite(to_file, ["@font-face{", attributes_to_list(attributes), "}"]) do
+              :ok -> :ok
+              error -> error
+            end
+
+          error ->
+            error
         end
       end,
       :ok,
@@ -392,11 +514,11 @@ defmodule CSSEx.Helpers.Output do
     new_om =
       case :ets.lookup(ets, chain) do
         [{_, existing}] ->
-          :ets.insert(ets, {chain, [existing, ";", attr_key, ":", attr_val]})
+          :ets.insert(ets, {chain, Map.put(existing, attr_key, attr_val)})
           om
 
         [] ->
-          :ets.insert(ets, {chain, [attr_key, ":", attr_val]})
+          :ets.insert(ets, {chain, Map.put(%{}, attr_key, attr_val)})
 
           om
           |> Map.put(:c, c + 1)
@@ -412,7 +534,7 @@ defmodule CSSEx.Helpers.Output do
       fn {selector, attributes}, %{c: c} = acc ->
         case :ets.lookup(to_write_to, selector) do
           [{_, existing}] ->
-            :ets.insert(to_write_to, {selector, [existing, ";" | attributes]})
+            :ets.insert(to_write_to, {selector, Map.merge(existing, attributes)})
             acc
 
           [] ->
@@ -432,16 +554,41 @@ defmodule CSSEx.Helpers.Output do
   def write_keyframe(
         %CSSEx.Parser{ets_keyframes: ets, keyframes_order_map: %{c: c} = om} = data,
         selector,
-        content
+        inner_ets
       ) do
     new_om =
       case :ets.lookup(ets, selector) do
         [{_, existing}] ->
-          :ets.insert(ets, {selector, [existing, ";", content]})
+          new_existing =
+            :ets.foldl(
+              fn {inner_selector, attributes}, acc ->
+                Map.put(
+                  acc,
+                  inner_selector,
+                  Map.merge(
+                    Map.get(existing, inner_selector, %{}),
+                    attributes
+                  )
+                )
+              end,
+              %{},
+              inner_ets
+            )
+
+          :ets.insert(ets, {selector, new_existing})
           om
 
         [] ->
-          :ets.insert(ets, {selector, content})
+          new_existing =
+            :ets.foldl(
+              fn {inner_selector, attributes}, acc ->
+                Map.put(acc, inner_selector, attributes)
+              end,
+              %{},
+              inner_ets
+            )
+
+          :ets.insert(ets, {selector, new_existing})
 
           om
           |> Map.put(:c, c + 1)
@@ -450,5 +597,15 @@ defmodule CSSEx.Helpers.Output do
       end
 
     %CSSEx.Parser{data | keyframes_order_map: new_om}
+  end
+
+  def attributes_to_list(attributes_map) do
+    Enum.reduce(attributes_map, [], fn
+      {k, v}, [_ | _] = acc ->
+        [acc | [";", k, ":", v]]
+
+      {k, v}, [] ->
+        [k, ":", v]
+    end)
   end
 end
