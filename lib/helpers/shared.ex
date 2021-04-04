@@ -279,6 +279,21 @@ defmodule CSSEx.Helpers.Shared do
     search_args_split(rem, n, levels, [acc, char], full_acc)
   end
 
+  def search_for(content, target), do: search_for(content, target, [])
+
+  Enum.each(['{', ';'], fn chars ->
+    def search_for(unquote(chars) ++ rem, unquote(chars), acc), do: {:ok, {rem, acc}}
+  end)
+
+  def search_for([char | rem], chars, acc), do: search_for(rem, chars, [acc | [char]])
+  def search_for([], _, acc), do: {:error, {[], acc}}
+
+  def block_search([125 | rem], 1, acc), do: {:ok, acc}
+  def block_search([125 | rem], n, acc), do: block_search(rem, n - 1, [acc, "}"])
+  def block_search([123 | rem], n, acc), do: block_search(rem, n + 1, [acc, "{"])
+  def block_search([char | rem], n, acc), do: block_search(rem, n, [acc, char])
+  def block_search([], _, _acc), do: {:error, {:block_search, :no_closing}}
+
   def valid_attribute_kv?(key, val)
       when is_binary(key) and
              is_binary(val) and

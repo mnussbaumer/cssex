@@ -23,7 +23,7 @@ defmodule CSSEx.Media.Test do
              """)
 
     assert parsed =~
-             "@media screen and (max-width:600px){.test div.example{display:none}.test{font-family:Arial;background-color:black}}\n"
+             "@media screen and (max-width:600px){.test div.example{display:none}.test{background-color:black;font-family:Arial}}\n"
 
     assert parsed =~ ".test{color:red}"
   end

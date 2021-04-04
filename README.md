@@ -24,6 +24,7 @@ Its main purpose is to provide a native Elixir pre-processor for CSS, in the vei
   <li><a href="#selectors">Selectors</a></li>
   <li><a href="#variables">Variables</a></li>
   <li><a href="#assigns">Assigns</a></li>
+  <li><a href="#expandable_apply">@expandable & @apply</a></li>
   <li><a href="#functions">Functions</a></li>
   <li><a href="#implemented_functions">Implemented Functions</a></li>
   <li><a href="#eex">EEx Blocks</a></li>
@@ -293,6 +294,209 @@ The declaration form is:
 
 It has to be terminated with semicolon followed by newline.
 
+<div id="expandable_apply"></div>
+
+#### @expandable & @apply
+
+Expandables allow you to define utility classes that can be used inside any selector to add attributes & or selectors. It allows for then `@apply`ing those blocks in different ways. You can force the `@apply` to be exactly as it was resolved when declared and keep the selector hierarchies there defined in reference to the `@expandable` selector, you can use it to be dynamically evaluated, or to apply its hierarchies in the new context while using any variable interpolation as it occurred when defining. It might sound confusing but with an example is easier to see
+
+```scss
+$!color red;
+
+@expandable .hoverable {
+  color: <$color$>;
+  &:hover {
+    color: @fn::darken(<$color$>, 10);
+  }
+  container& {
+    background-color: black;
+  }
+}
+
+.class-1 {
+  @apply hoverable;
+}
+
+$!color blue;
+
+.class-2 {
+  @apply !hoverable;
+}
+
+.class-3 {
+  @apply ?hoverable;
+}
+
+.class-4 {
+  @apply hoverable;
+}
+```
+
+##### into
+
+```css
+.hoverable {
+  color:red
+}
+
+.hoverable:hover {
+  color:rgba(204,0,0,1.0)
+}
+
+container .hoverable {
+  background-color:black
+}
+
+.class-1 {
+  color:red
+}
+
+.class-1:hover {
+  color:rgba(204,0,0,1.0)
+}
+
+container .class-1 {
+  background-color:black
+}
+
+.class-2 {
+  color:red
+}
+
+.class-2 .hoverable:hover {
+  color:rgba(204,0,0,1.0)
+}
+
+.class-2 container .hoverable {
+  background-color:black
+}
+
+.class-3 {
+  color:blue
+}
+
+.class-3:hover {
+  color:rgba(0,204,0,1.0)
+}
+
+container .class-3 {
+  background-color:black
+}
+
+.class-4 {
+  color:red
+}
+
+.class-4:hover {
+  color:rgba(204,0,0,1.0)
+}
+
+container .class-4 {
+  background-color:black
+}
+```
+
+As you can see, we had a variable `$!color` declared with the value `red`.
+Then we declared an `@expandable` block for the selector `.hoverable`, where we used interpolation for `color`, and had nesting selectors, one of which calling a function again with an interpolated value.
+
+That is the top level declarations that came on top of the stylesheet:
+
+```css
+.hoverable {
+  color:red
+}
+
+.hoverable:hover {
+  color:rgba(204,0,0,1.0)
+}
+
+container .hoverable {
+  background-color:black
+}
+```
+Then we declared a `.class-1` selector and applied the `hoverable` element we declared as `@expandable` before inside it (notice we don't use the `.` before its name).
+
+What this did was apply all the contents of that expandable element inside `.class-1`. You can see that the nesting `&` where applied to `.class-1`:
+
+```css
+.class-1 {
+  color:red
+}
+
+.class-1:hover {
+  color:rgba(204,0,0,1.0)
+}
+
+container .class-1 {
+  background-color:black
+}
+```
+
+Then we overwrote the `color` variable with the value `blue`.
+On `.class-2` we did the same as in `.class-1` but this time we prepended the name with `!`. This forces the expandable element to be inserted with the interpolation it had when evaluated originally and also with the nesting referring to the original `.hoverable` selector:
+
+```css
+.class-2 {
+  color:red
+}
+
+.class-2 .hoverable:hover {
+  color:rgba(204,0,0,1.0)
+}
+
+.class-2 container .hoverable {
+  background-color:black
+}
+```
+
+On `.class-3` we did the same, but now prepended the expandable identifier with `?`. This made it be dynamically evaluated, both interpolation and nesting. You can see the color being blue and the result of `@fn::darken` being blue as well:
+
+```css
+.class-3 {
+  color:blue
+}
+
+.class-3:hover {
+  color:rgba(0,204,0,1.0)
+}
+
+container .class-3 {
+  background-color:black
+}
+```
+
+Lastly we did the same original non-prefix `@apply` in `.class-4` and in this case, the value of the variables used were the ones set at declaration time, `red`, but the nesting was still applied in terms of the current selector:
+
+```css
+.class-4 {
+  color:red
+}
+
+.class-4:hover {
+  color:rgba(204,0,0,1.0)
+}
+
+container .class-4 {
+  background-color:black
+}
+```
+
+You can also string together several elements to expand in a single `@apply`, with different evaluation scopes as well. The order of declaration is the order the attributes will be set.
+
+`@apply one-expandable ?another-expandable !a-different-one;`
+
+`@expandable` declarations specify a **single** class selector (e.g. `.class`) followed by a block `{ ... }`.
+
+The `@expandable` directives  are placed in order of declaration at the top of the final stylesheet as individual selectors, but you can declare them from any file or part of the file as long as it's not inside a block, they must always be declared on a top level.
+
+The only exception on their final placement is when using `@media` selectors inside `@expandable`. In those cases normal rules will go to the top but the media parts will be placed alongside the other media statements.
+
+The `@apply` directive takes a list of white-space separated tokens, where each token refers to a previously declared `@expandable` block. You should not use the `.` of the original class to refer to them. You can additionally define their expansion mode with `?` (all elements dynamically evaluated) or `!` (as a static block as evaluated when declared). The default without prefix is a mix of both, variables with the values at the time of declaration and nesting dynamically evaluated inside the context of the block the `@apply` is declared in.
+
+Keep note that `<$ ... $>` interpolation is the only consistent form of interpolation. If you use, for instance in `@fn::...` call the form `$::color`, this will always be dynamically evaluated. EEx blocks follow the same pattern, if you want them to be expanded as they resolved at declaration you need to use the `!` prefix when `@apply`ing.
+
+Note that you can also declare `@media` attributes inside `@expandables` and nest them as well. Most times you'll want to use normal applying or `?`.
+
 
 <div id="functions"></>
 
@@ -514,6 +718,8 @@ $()
 $*()
 $::
 @include
+@expandable
+@apply
 @fn
 <% ....
 <$ ....
@@ -539,13 +745,13 @@ And `../shared/samples.cssex`:
 
 ```css
 $()tag div
-#{tag} { background-color: white; color: orange; }
+<$tag$> { background-color: white; color: orange; }
 ```
 
-The final output will always have `div` declared first, and the attributes in their declaration order:
+The final output will always have `div` declared first, and duplicate attributes will hold the value according to their declaration order. Since the last evaluated `div` selector set the color to `orange` that's the color that the final stylesheet will hold:
 
 ```css
-div { color: green; background-color: white, color: orange }
+div {background-color: white, color: orange }
 .sample { color: red }
 ```
 
@@ -557,20 +763,22 @@ div { color: green; }
 div { background-color: white, color: orange }
 ```
 
-This means it can condense the final output. Right now it doesn't substitute repeated rules, but that might be added in the future.
+This means it can condense the final output, and also that it's ok to `@apply` multiple `@expandable` classes to an element as any repeated attributes are just replaced, or define selectors with repeated attributes in different places as they coalesce into a single representations.
 
-If you want multiple declarations to not be merged right now the only possibility is to have different entry points that produce plain css files and use them with regular `@import` rules on a final css file that isn't parsed by cssex. 
+If you want multiple declarations to not be merged right now the only possibility is to have different entry points that produce plain css files and use them with regular `@import` rules on a final css. 
 
 The final output always follows this format:
 
 ```
 @charset
 @imports
-**:root { variables }**
-**all regular selectors and their rules**
 @font-face
+**:root { variables }**
+@expandables
+**all regular selectors and their rules**
 @media
 @keyframes
+\n
 ```
 
 

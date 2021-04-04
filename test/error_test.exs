@@ -118,7 +118,6 @@ defmodule CSSEx.Error.Test do
 
     assert {:error, %Parser{error: error}} = Parser.parse("div{:color:}")
 
-    assert error =~
-             "invalid declaration of css rule where key ->  <- and value -> color: <-\" :: l:1 c:4"
+    assert error =~ "\"unexpected token: color\" :: l:1 c:4"
   end
 end

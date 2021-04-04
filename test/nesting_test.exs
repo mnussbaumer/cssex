@@ -39,7 +39,7 @@ defmodule CSSEx.Nesting.Test do
 
     assert parsed =~ ".div_1{color:red}"
     assert parsed =~ ".div_1 .div_1_b,.div_1 .div_1_a{color:blue}"
-    assert parsed =~ ".div_1.div_2_a{width:100%;padding:5px}"
+    assert parsed =~ ".div_1.div_2_a{padding:5px;width:100%}"
     assert parsed =~ ".div_1.div_2_a.div_2_a_a,.div_1 .div_2_b.div_2_a_a{height:100%}"
     assert parsed =~ ".div_1.div_2_a.div_2_a_a .inner-inner{display:block}"
     assert parsed =~ ".div_1.div_3_b,.div_1 .div_1_a{margin:10px}"

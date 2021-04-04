@@ -69,7 +69,9 @@ defmodule CSSEx.Parser do
     dependencies: [],
     search_acc: [],
     order_map: %{c: 0},
-    keyframes_order_map: %{c: 0}
+    keyframes_order_map: %{c: 0},
+    expandables: %{},
+    expandables_order_map: %{c: 0}
   ]
 
   @white_space CSSEx.Helpers.WhiteSpace.code_points()
@@ -290,7 +292,7 @@ defmodule CSSEx.Parser do
 
   # Handle a function call, this is on top of everything as when outside EEx blocks,
   # meaning normal parsing, it should be replaced by the return value of the function
-  # we parse from @fn:: ... to the end of the declaration ")", we do it the Function
+  # we parse from @fn:: ... to the end of the declaration ")", we do it in the Function
   # module as it has its own parsing nuances
   def handle_event(
         :internal,
@@ -313,6 +315,66 @@ defmodule CSSEx.Parser do
 
       {:error, %{valid?: false} = error_data} ->
         {:keep_state, error_data, [{:next_event, :internal, {:parse, rem}}]}
+    end
+  end
+
+  # Handle an @expandable declaration, this is on top of everything as it's only allowed on top level and should be handled specifically
+  def handle_event(
+        :internal,
+        {:parse, '@expandable' ++ rem},
+        {:parse, :next},
+        %{current_chain: []} = data
+      ) do
+    new_data =
+      data
+      |> open_current(:expandable)
+      |> inc_col(11)
+
+    case CSSEx.Helpers.Expandable.parse(rem, new_data) do
+      {:ok, {new_data_2, new_rem}} ->
+        {:keep_state, reset_current(new_data_2), [{:next_event, :internal, {:parse, new_rem}}]}
+
+      {:error, error} ->
+        {:keep_state, add_error(new_data, error_msg(error)),
+         [{:next_event, :internal, {:parse, rem}}]}
+    end
+  end
+
+  def handle_event(
+        :internal,
+        {:parse, '@expandable' ++ rem},
+        state,
+        data
+      ) do
+    new_data = add_error(data, error_msg({:expandable, state, data}))
+    {:keep_state, new_data, [{:next_event, :internal, {:parse, rem}}]}
+  end
+
+  # Handle an @apply declaration
+  def handle_event(
+        :internal,
+        {:parse, '@apply' ++ rem},
+        {:parse, :next},
+        data
+      ) do
+    new_data =
+      data
+      |> open_current(:apply)
+      |> inc_col(6)
+
+    case CSSEx.Helpers.Expandable.make_apply(rem, new_data) do
+      {:ok, new_rem} ->
+        new_data_2 =
+          new_data
+          |> close_current()
+          |> inc_no_count(1)
+          |> reset_current()
+
+        {:keep_state, new_data_2, [{:next_event, :internal, {:parse, new_rem}}]}
+
+      {:error, error} ->
+        {:keep_state, add_error(new_data, error_msg(error)),
+         [{:next_event, :internal, {:parse, rem}}]}
     end
   end
 
@@ -582,9 +644,18 @@ defmodule CSSEx.Parser do
         :internal,
         {:parse, [125 | _] = full},
         {:parse, :current_key},
-        %{current_chain: [_ | _]} = data
+        %{current_chain: [_ | _]}
       ) do
-    {:keep_state, data, [{:next_event, :internal, {:parse, [?; | full]}}]}
+    {:keep_state_and_data, [{:next_event, :internal, {:parse, [?; | full]}}]}
+  end
+
+  def handle_event(
+        :internal,
+        {:parse, [125 | _] = full},
+        {:parse, :current_key},
+        %{split_chain: [_ | _]}
+      ) do
+    {:keep_state_and_data, [{:next_event, :internal, {:parse, [?; | full]}}]}
   end
 
   # we reached an eex opening tag, because it requires dedicated handling and parsing
@@ -1040,7 +1111,7 @@ defmodule CSSEx.Parser do
       ) do
     current_key
     |> IO.chardata_to_string()
-    |> String.split(":", parts: 2)
+    |> String.split(":")
     |> case do
       [key, val] ->
         ckey = String.trim(key)
@@ -1118,7 +1189,7 @@ defmodule CSSEx.Parser do
   # we're accumulating on something, add the value to that type we're accumulating
   def handle_event(
         :internal,
-        {:parse, [char | rem]},
+        {:parse, [char | rem] = full},
         {:parse, type},
         data
       ),
@@ -1234,8 +1305,8 @@ defmodule CSSEx.Parser do
         case HShared.valid_attribute_kv?(key, new_val) do
           true ->
             case :ets.lookup(ets, ffc) do
-              [{_, existing}] -> :ets.insert(ets, {ffc, [existing, ";", key, ":", new_val]})
-              [] -> :ets.insert(ets, {ffc, [key, ":", new_val]})
+              [{_, existing}] -> :ets.insert(ets, {ffc, Map.put(existing, key, new_val)})
+              [] -> :ets.insert(ets, {ffc, Map.put(%{}, key, new_val)})
             end
 
             data
@@ -1271,8 +1342,8 @@ defmodule CSSEx.Parser do
   def add_current_selector(%{font_face: true} = data), do: data
 
   # add the current_selector to the current_chain
-  def add_current_selector(%{current_key: cs} = data) do
-    current_selector = String.trim(IO.chardata_to_string(cs))
+  def add_current_selector(%{current_key: ck} = data) do
+    current_selector = String.trim(IO.chardata_to_string(ck))
 
     case maybe_replace_val(current_selector, data) do
       {:ok, replaced_selector} ->
@@ -1307,29 +1378,30 @@ defmodule CSSEx.Parser do
           current_scope: current_scope,
           local_scope: local_scope,
           scope: scope,
-          current_chain: []
+          current_chain: current_chain,
+          split_chain: split_chain
         } = data,
         key,
         val
       ) do
-    check_if_to_add =
+    new_val =
       case current_scope do
-        :conditional -> !(Map.get(scope, key, false) and Map.get(local_scope, key, false))
-        _ -> true
+        :conditional -> Map.get(local_scope, key, Map.get(scope, key, false)) || val
+        _ -> val
       end
 
-    case check_if_to_add do
-      true ->
-        case maybe_replace_val(val, data) do
-          {:ok, new_val} ->
-            add_css_var(data, [":root"], key, new_val)
+    new_cc =
+      case current_chain do
+        [] -> ":root"
+        _ -> split_chain
+      end
 
-          {:error, {:not_declared, _, _} = error} ->
-            add_error(data, error_msg(error))
-        end
+    case maybe_replace_val(new_val, data) do
+      {:ok, new_val_2} ->
+        add_css_var(data, new_cc, key, new_val_2)
 
-      _ ->
-        data
+      {:error, {:not_declared, _, _} = error} ->
+        add_error(data, error_msg(error))
     end
   end
 
@@ -1338,11 +1410,11 @@ defmodule CSSEx.Parser do
     new_om =
       case :ets.lookup(ets, cc) do
         [{_, existing}] ->
-          :ets.insert(ets, {cc, [existing, ";--", key, ":", val]})
+          :ets.insert(ets, {cc, Map.put(existing, "--#{key}", val)})
           om
 
         [] ->
-          :ets.insert(ets, {cc, ["--", key, ":", val]})
+          :ets.insert(ets, {cc, Map.put(%{}, "--#{key}", val)})
 
           om
           |> Map.put(:c, c + 1)
@@ -1502,9 +1574,8 @@ defmodule CSSEx.Parser do
 
     case maybe_replace_val(parsed, data) do
       {:ok, cval} ->
-        full_path = ["@keyframes ", String.trim(cval)]
-        folded_css = Output.fold_attributes_table(inner_ets)
-        new_data = Output.write_keyframe(data, full_path, folded_css)
+        full_path = "@keyframes #{String.trim(cval)}"
+        new_data = Output.write_keyframe(data, full_path, inner_ets)
         :ets.delete(inner_ets)
         new_data
 
@@ -1598,12 +1669,12 @@ defmodule CSSEx.Parser do
           warnings: existing_warnings,
           scope: existing_scope,
           assigns: existing_assigns,
-          functions: existing_functions,
-          media: media
+          functions: existing_functions
+          # media: media
         } = data,
         %{
           warnings: warnings,
-          # media: media,
+          media: media,
           scope: scope,
           assigns: assigns,
           valid?: valid?,
@@ -1666,7 +1737,7 @@ defmodule CSSEx.Parser do
   end
 
   @doc false
-  def add_error(%{line: line, column: column} = data, error) do
+  def add_error(%{line: line, column: column, current_key: current_key} = data, error) do
     %{data | valid?: false, error: "#{inspect(error)} :: l:#{line} c:#{column}"}
     |> finish_error()
   end

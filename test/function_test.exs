@@ -28,7 +28,7 @@ defmodule CSSEx.Function.Test do
     assert {
              :ok,
              _,
-             ".test{color:hsla(0,100%,60%,1.0);color:hsla(300,7%,15%,1.0)}\n"
+             ".test{color:hsla(300,7%,15%,1.0)}\n"
            } = Parser.parse(@basic)
   end
 
