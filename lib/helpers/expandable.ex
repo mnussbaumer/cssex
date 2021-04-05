@@ -141,22 +141,15 @@ defmodule CSSEx.Helpers.Expandable do
             {:error, {:invalid_expandable, current_selector}}
         end
 
-      error ->
+      _ ->
         {:error, {:invalid_expandable, current_selector}}
     end
   end
 
-  def set_base_selector(%{order_map: om} = data, validated) do
-    new_om =
-      data
-      |> Map.put([validated], 0)
-      |> Map.put(0, [validated])
-      |> Map.put(:c, 1)
+  def set_base_selector(data, validated),
+    do: %{data | order_map: %{c: 0}, current_chain: [validated]}
 
-    %{data | order_map: %{c: 0}, current_chain: [validated]}
-  end
-
-  def make_apply(rem, %{expandables: expandables} = data) do
+  def make_apply(rem, %{expandables: expandables} = _data) do
     {:ok, {new_rem, identifiers}} = CSSEx.Helpers.Shared.search_for(rem, ';')
 
     identifiers
@@ -176,7 +169,7 @@ defmodule CSSEx.Helpers.Expandable do
         nil ->
           {:halt, {:error, {:not_declared, :expandable, selector}}}
 
-        {attrs, other_selectors, media, expandable_fixed, expandable} = all ->
+        {attrs, other_selectors, media, expandable_fixed, expandable} = _all ->
           to_add =
             case expand? do
               :as_is ->
