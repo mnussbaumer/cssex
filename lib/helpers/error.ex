@@ -51,4 +51,24 @@ defmodule CSSEx.Helpers.Error do
 
   def error_msg({:invalid_expandable, name}),
     do: "invalid @expandable selector #{name}"
+
+  def error_msg({:block_search, :no_closing}),
+    do: "unable to find block terminator }"
+
+  def error_msg(:no_page),
+    do: "a @page declaration should only contain pseudo selectors"
+
+  def error_msg(something), do: "#{inspect(something)}"
+
+  def warning_msg(:single_charset),
+    do: "duplicate @charset declaration"
+
+  def warning_msg(:charset_position),
+    do: "@charset declaration must be the first rule in a spreadsheet"
+
+  def warning_msg(:import_position),
+    do: "@import declarations must be at the top level of a file or after a @charset declaration"
+
+  def warning_msg(:incomplete_declaration),
+    do: "incomplete declaration, line was removed"
 end

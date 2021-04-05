@@ -288,7 +288,7 @@ defmodule CSSEx.Helpers.Shared do
   def search_for([char | rem], chars, acc), do: search_for(rem, chars, [acc | [char]])
   def search_for([], _, acc), do: {:error, {[], acc}}
 
-  def block_search([125 | rem], 1, acc), do: {:ok, acc}
+  def block_search([125 | _rem], 1, acc), do: {:ok, acc}
   def block_search([125 | rem], n, acc), do: block_search(rem, n - 1, [acc, "}"])
   def block_search([123 | rem], n, acc), do: block_search(rem, n + 1, [acc, "{"])
   def block_search([char | rem], n, acc), do: block_search(rem, n, [acc, char])

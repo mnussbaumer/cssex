@@ -90,7 +90,7 @@ defmodule CSSEx.Helpers.Function do
         end
 
       _ ->
-        {:error, :invalid_declaration}
+        {:error, {:invalid, :function_declaration, declaration}}
     end
   end
 

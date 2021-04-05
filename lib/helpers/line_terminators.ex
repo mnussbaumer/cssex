@@ -9,7 +9,6 @@ defmodule CSSEx.Helpers.LineTerminators do
                               "\u000B",
                               "\u000C",
                               "\u000D",
-                              "\u000D\u000A",
                               "\u0085",
                               "\u2028",
                               "\u2029"

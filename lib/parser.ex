@@ -7,7 +7,7 @@ defmodule CSSEx.Parser do
     only: [inc_col: 1, inc_col: 2, inc_line: 1, remove_last_from_chain: 1, inc_no_count: 2]
 
   import CSSEx.Helpers.Interpolations, only: [maybe_replace_val: 2]
-  import CSSEx.Helpers.Error, only: [error_msg: 1]
+  import CSSEx.Helpers.Error, only: [error_msg: 1, warning_msg: 1]
 
   alias CSSEx.Helpers.Shared, as: HShared
   alias CSSEx.Helpers.Output
@@ -656,12 +656,12 @@ defmodule CSSEx.Parser do
   def handle_event(
         :internal,
         {:parse, [125 | rem]},
-        {:parse, :current_var} = state,
+        {:parse, :current_var},
         data
       ) do
     new_data =
       data
-      |> add_warning(:missing, state)
+      |> add_warning(warning_msg(:incomplete_declaration))
       |> close_current()
       |> reset_current()
       |> inc_col()
@@ -1224,7 +1224,7 @@ defmodule CSSEx.Parser do
   # we're accumulating on something, add the value to that type we're accumulating
   def handle_event(
         :internal,
-        {:parse, [char | rem] = full},
+        {:parse, [char | rem]},
         {:parse, type},
         data
       ),
@@ -1384,8 +1384,8 @@ defmodule CSSEx.Parser do
       {:ok, replaced_selector} ->
         HShared.add_selector_to_chain(data, replaced_selector)
 
-      _ ->
-        %{data | valid?: false, error: "variable in #{current_selector} was not declared"}
+      {:error, error} ->
+        add_error(data, error_msg(error))
     end
   end
 
@@ -1470,29 +1470,21 @@ defmodule CSSEx.Parser do
     %{data | charset: ~s("#{new_charset}")}
   end
 
-  def validate_charset(
-        %{charset: charset, first_rule: first_rule, line: line, column: col, warnings: warnings} =
-          data
-      ) do
-    warning_1 =
-      case charset do
-        nil -> []
-        _ -> ["Only a single @charset declaration is valid l:#{line} c:#{col}"]
-      end
+  def validate_charset(%{charset: charset, first_rule: first_rule} = data) do
+    case charset do
+      nil -> data
+      _ -> add_warning(data, warning_msg(:single_charset))
+    end
+    |> case do
+      new_data ->
+        case first_rule do
+          true ->
+            new_data
 
-    warning_2 =
-      case first_rule do
-        true ->
-          warning_1
-
-        _ ->
-          [
-            "@charset declaration must be the first rule in a spreadsheet l:#{line} c:#{col}"
-            | warning_1
-          ]
-      end
-
-    %{data | warnings: :lists.flatten([warning_2 | warnings])}
+          _ ->
+            add_warning(data, warning_msg(:charset_position))
+        end
+    end
     |> reset_current()
   end
 
@@ -1510,30 +1502,12 @@ defmodule CSSEx.Parser do
     |> add_to_dependencies(no_quotes)
   end
 
-  def validate_import(%{first_rule: false, line: line, column: col, warnings: warnings} = data) do
-    %{
-      data
-      | warnings: [
-          "@import declarations must be at the top level of a file, with exception of the @charset declaration that comes always first if present l:#{
-            line
-          } c:#{col}"
-          | warnings
-        ]
-    }
-  end
+  def validate_import(%{first_rule: false} = data),
+    do: add_warning(data, warning_msg(:import_declaration))
 
   @doc false
   def first_rule(%{first_rule: false} = data), do: data
   def first_rule(data), do: %{data | first_rule: false}
-
-  @doc false
-  def add_warning(%{warnings: warnings, column: col, line: line} = data, :missing, {:parse, _}),
-    do: %{
-      data
-      | warnings: [
-          "Incomplete declaration at l:#{line} and c:#{col} - this line was removed" | warnings
-        ]
-    }
 
   @doc false
   # reply back according to the level
@@ -1781,15 +1755,16 @@ defmodule CSSEx.Parser do
   end
 
   @doc false
-  def add_error(%{current_reg: [{s_line, s_col, step} | _]} = data) do
-    final_error = "#{error_msg({:terminator, step})} at l:#{s_line} col:#{s_col} to"
-
-    add_error(%{data | current_reg: []}, final_error)
-  end
+  def add_error(%{current_reg: [{s_l, s_c, step} | _]} = data),
+    do:
+      add_error(
+        %{data | current_reg: []},
+        "#{error_msg({:terminator, step})} at l:#{s_l} col:#{s_c} to"
+      )
 
   @doc false
-  def add_error(%{line: line, column: column, current_key: current_key} = data, error) do
-    %{data | valid?: false, error: "#{inspect(error)} :: l:#{line} c:#{column}"}
+  def add_error(%{line: l, column: c} = data, error) do
+    %{data | valid?: false, error: "#{inspect(error)} :: l:#{l} c:#{c}"}
     |> finish_error()
   end
 
@@ -1803,6 +1778,10 @@ defmodule CSSEx.Parser do
           end)
     }
   end
+
+  @doc false
+  def add_warning(%{warnings: warnings, line: l, column: c, file: f} = data, msg),
+    do: %{data | warnings: ["#{msg} :: l:#{l} c:#{c} in file: #{f}" | warnings]}
 
   @doc false
   def open_current(%{current_reg: creg, line: l, column: c} = data, element) do

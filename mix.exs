@@ -4,13 +4,13 @@ defmodule Cssex.MixProject do
   def project do
     [
       app: :cssex,
-      version: "0.6.2",
+      version: "0.6.3",
       elixir: "~> 1.9",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       name: "CSSEx",
       source_url: "https://github.com/mnussbaumer/cssex",
-      homepage_url: "https://github.com/mnussbaumer/cssex",
+      homepage_url: "https://hexdocs.pm/cssex/readme.html",
       docs: [
         main: "CSSEx",
         extras: ["README.md"]
