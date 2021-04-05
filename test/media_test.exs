@@ -3,7 +3,8 @@ defmodule CSSEx.Media.Test do
   alias CSSEx.Parser
 
   test "nested media generates the correct css rules and doesn't generate a media query nested into a selector" do
-    assert {:ok, _, parsed} =
+    assert {:ok, _,
+            ".test{color:red}@media screen and (max-width:600px){.test div.example{display:none}.test{background-color:black;font-family:Arial}}\n"} =
              Parser.parse("""
              .test {
                @media screen and (max-width: 600px) {
@@ -21,11 +22,6 @@ defmodule CSSEx.Media.Test do
                .test { background-color: black; }
              }
              """)
-
-    assert parsed =~
-             "@media screen and (max-width:600px){.test div.example{display:none}.test{background-color:black;font-family:Arial}}\n"
-
-    assert parsed =~ ".test{color:red}"
   end
 
   test "replacement of variables inside media works correctly" do
@@ -54,6 +50,19 @@ defmodule CSSEx.Media.Test do
              	   color: <$color$>;
                }
              }}
+             """)
+  end
+
+  test "nested media nest" do
+    assert {:ok, _, "@media screen and (max-width:600px){div{color:red}}\n"} =
+             Parser.parse("""
+             @media screen {
+               @media and (max-width: 600px) {
+                 div {
+                   color: red;
+                 }
+               }
+             }
              """)
   end
 end

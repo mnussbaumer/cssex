@@ -325,27 +325,27 @@ defmodule CSSEx.Helpers.Output do
 
   defp write_map_based_rules(nil, map_content, acc) do
     Enum.reduce(map_content, acc, fn {rule, {ets_table, om}}, acc_i ->
-      [acc_i, rule, "{", fold_attributes_table(ets_table, om), "}"]
+      case fold_attributes_table(ets_table, om) do
+        [] ->
+          acc_i
+
+        folded ->
+          [acc_i, rule, "{", folded, "}"]
+      end
     end)
   end
 
   defp write_map_based_rules(to_file, map_content, _acc) do
     Enum.reduce_while(map_content, :ok, fn {rule, {ets_table, om}}, _acc ->
-      case IO.binwrite(to_file, [rule, "{"]) do
-        :ok ->
-          case fold_attributes_table(ets_table, om, to_file) do
-            :ok ->
-              case IO.binwrite(to_file, "}") do
-                :ok -> {:cont, :ok}
-                error -> {:halt, error}
-              end
+      case fold_attributes_table(ets_table, om) do
+        [] ->
+          {:cont, :ok}
 
-            error ->
-              {:halt, error}
+        folded ->
+          case IO.binwrite(to_file, [rule, "{", folded, "}"]) do
+            :ok -> {:cont, :ok}
+            error -> {:halt, error}
           end
-
-        error ->
-          {:halt, error}
       end
     end)
   end
@@ -467,9 +467,15 @@ defmodule CSSEx.Helpers.Output do
             :ok
 
           [{_, attrs}] ->
-            case IO.binwrite(to_file, [selector, "{", attributes_to_list(attrs), "}"]) do
-              :ok -> :ok
-              error -> error
+            case attributes_to_list(attrs) do
+              [] ->
+                :ok
+
+              attrs_list ->
+                case IO.binwrite(to_file, [selector, "{", attrs_list, "}"]) do
+                  :ok -> :ok
+                  error -> error
+                end
             end
         end
     end)
