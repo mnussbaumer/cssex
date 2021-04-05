@@ -61,6 +61,10 @@ defmodule CSSEx.Parser do
     warnings: [],
     media: %{},
     media_parent: "",
+    page: %{},
+    page_parent: "",
+    supports: %{},
+    supports_parent: "",
     source_pid: nil,
     prefix: nil,
     font_face: false,
@@ -535,6 +539,35 @@ defmodule CSSEx.Parser do
 
   def handle_event(
         :internal,
+        {:parse, '@supports' ++ rem},
+        {:parse, :next},
+        data
+      ) do
+    new_data =
+      data
+      |> open_current(:supports)
+      |> inc_col(6)
+
+    {:next_state, {:parse, :value, :supports}, new_data,
+     [{:next_event, :internal, {:parse, rem}}]}
+  end
+
+  def handle_event(
+        :internal,
+        {:parse, '@page' ++ rem},
+        {:parse, :next},
+        data
+      ) do
+    new_data =
+      data
+      |> open_current(:page)
+      |> inc_col(6)
+
+    {:next_state, {:parse, :value, :page}, new_data, [{:next_event, :internal, {:parse, rem}}]}
+  end
+
+  def handle_event(
+        :internal,
         {:parse, '@keyframes' ++ rem},
         {:parse, :next},
         data
@@ -742,7 +775,7 @@ defmodule CSSEx.Parser do
           {:parse, :value, type},
           %{current_value: cval} = data
         )
-        when type in [:media, :keyframes, :import, :include],
+        when type in [:media, :keyframes, :import, :include, :page, :supports],
         do: {
           :keep_state,
           %{data | current_value: [cval, unquote(char)]},
@@ -928,6 +961,7 @@ defmodule CSSEx.Parser do
         data
       ) do
     ## TODO validate it's a valid selector, error if not
+
     new_data =
       data
       |> add_current_selector()
@@ -947,19 +981,20 @@ defmodule CSSEx.Parser do
   def handle_event(
         :internal,
         {:parse, [123 | rem]},
-        {:parse, :value, :media},
+        {:parse, :value, type},
         data
-      ) do
+      )
+      when type in [:media, :page, :supports] do
     inner_data =
       %{data | order_map: %{c: 0}}
       |> create_data_for_inner(false, nil)
-      |> add_media_parent(data)
+      |> add_parent_information(data, type)
 
     case __MODULE__.parse(inner_data, rem) do
       {:finished, {%{column: n_col, line: n_line} = new_inner_data, new_rem}} ->
         new_data =
           %{data | line: n_line, column: n_col}
-          |> add_media_query(new_inner_data)
+          |> add_inner_result(new_inner_data, type)
           |> close_current()
           |> reset_current()
 
@@ -1528,37 +1563,45 @@ defmodule CSSEx.Parser do
   end
 
   @doc false
-  def add_media_query(
-        %{current_value: current_value, media_parent: media_p} = data,
-        %{ets: inner_ets, media: media, order_map: om}
-      ) do
+  def add_inner_result(
+        %{current_value: current_value} = data,
+        %{ets: inner_ets, order_map: om} = inner_data,
+        type
+      )
+      when type in [:media, :page, :supports] do
+    selector = "@#{type}"
+    parent_selector_key = String.to_existing_atom("#{type}_parent")
+    parent_selector = Map.fetch!(data, parent_selector_key)
+
+    inner_map_acc = Map.fetch!(inner_data, type)
+
     parsed =
       current_value
       |> IO.chardata_to_string()
       |> String.trim()
       |> to_charlist()
 
-    {parsed_2, data} = CSSEx.Helpers.Media.parse(parsed, data)
+    {parsed_2, data} = CSSEx.Helpers.AtParser.parse(parsed, data, type)
 
     case maybe_replace_val(parsed_2, data) do
       {:ok, cval} ->
-        media_query =
-          ["@media", media_p, cval]
+        selector_query =
+          [selector, parent_selector, cval]
           |> Enum.filter(fn element -> String.length(element) > 0 end)
           |> Enum.join(" ")
 
-        new_media =
-          case Map.get(media, media_query) do
+        new_type_acc =
+          case Map.get(inner_map_acc, selector_query) do
             nil ->
-              Map.put(media, media_query, {inner_ets, om})
+              Map.put(inner_map_acc, selector_query, {inner_ets, om})
 
             {original_ets, existing_om} ->
-              new_om = Output.write_media(inner_ets, original_ets, existing_om)
+              new_om = Output.transfer_mergeable(inner_ets, original_ets, existing_om)
               :ets.delete(inner_ets)
-              Map.put(media, media_query, {original_ets, new_om})
+              Map.put(inner_map_acc, selector_query, {original_ets, new_om})
           end
 
-        %{data | media: new_media}
+        Map.put(data, type, new_type_acc)
 
       {:error, {:not_declared, _, _} = error} ->
         add_error(data, error_msg(error))
@@ -1645,22 +1688,30 @@ defmodule CSSEx.Parser do
   end
 
   @doc false
-  def add_media_parent(
+  def add_parent_information(
         data,
-        %{current_value: current_value, media_parent: media_parent} = _parent_data
-      ) do
-    {parsed_2, data} = CSSEx.Helpers.Media.parse(:lists.flatten(current_value), data)
+        %{current_value: current_value} = parent_data,
+        type
+      )
+      when type in [:media, :supports, :page] do
+    parent_key = String.to_existing_atom("#{type}_parent")
+    parent_current = Map.fetch!(parent_data, parent_key)
+
+    {parsed, data} =
+      current_value
+      |> :lists.flatten()
+      |> CSSEx.Helpers.AtParser.parse(data, type)
 
     new_media_parent =
       [
-        media_parent,
-        IO.chardata_to_string(parsed_2)
+        parent_current,
+        IO.chardata_to_string(parsed)
       ]
       |> Enum.map(fn element -> String.trim(element) end)
       |> Enum.join(" ")
       |> String.trim()
 
-    %{data | media_parent: new_media_parent}
+    Map.put(data, parent_key, new_media_parent)
   end
 
   @doc false

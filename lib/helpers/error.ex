@@ -46,6 +46,9 @@ defmodule CSSEx.Helpers.Error do
   def error_msg({:invalid_declaration, key, val}),
     do: "invalid declaration of css rule where key -> #{key} <- and value -> #{val} <-"
 
+  def error_msg({:invalid, what, info}),
+    do: "invalid declaration #{inspect(what)} :: reason -> #{inspect(info)}"
+
   def error_msg({:invalid_expandable, name}),
     do: "invalid @expandable selector #{name}"
 end

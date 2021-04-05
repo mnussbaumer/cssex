@@ -46,6 +46,8 @@ defmodule CSSEx.Helpers.Output do
     |> add_general()
     |> maybe_add_media()
     |> maybe_add_keyframes()
+    |> maybe_add_supports()
+    |> maybe_add_page()
     |> add_final_new_line()
     |> case do
       %__MODULE__{valid?: true} = ctx -> {:ok, ctx}
@@ -200,7 +202,7 @@ defmodule CSSEx.Helpers.Output do
         } = ctx
       ) do
     Enum.reduce_while(0..c, :ok, fn n, acc ->
-      case Map.get(eom, c) do
+      case Map.get(eom, n) do
         nil ->
           {:cont, acc}
 
@@ -255,14 +257,8 @@ defmodule CSSEx.Helpers.Output do
           acc: acc,
           data: %CSSEx.Parser{media: media}
         } = ctx
-      ) do
-    new_acc =
-      Enum.reduce(media, acc, fn {media_rule, {ets_table, om}}, acc ->
-        [acc, media_rule, "{", fold_attributes_table(ets_table, om), "}"]
-      end)
-
-    %__MODULE__{ctx | acc: new_acc}
-  end
+      ),
+      do: %__MODULE__{ctx | acc: write_map_based_rules(nil, media, acc)}
 
   def maybe_add_media(
         %__MODULE__{
@@ -271,8 +267,71 @@ defmodule CSSEx.Helpers.Output do
           valid?: true
         } = ctx
       ) do
-    Enum.reduce_while(media, :ok, fn {media_rule, {ets_table, om}}, _acc ->
-      case IO.binwrite(to_file, [media_rule, "{"]) do
+    case write_map_based_rules(to_file, media, nil) do
+      :ok -> ctx
+      error -> add_error(ctx, error)
+    end
+  end
+
+  def maybe_add_media(ctx), do: ctx
+
+  def maybe_add_supports(
+        %__MODULE__{
+          to_file: nil,
+          acc: acc,
+          data: %CSSEx.Parser{supports: supports}
+        } = ctx
+      ),
+      do: %__MODULE__{ctx | acc: write_map_based_rules(nil, supports, acc)}
+
+  def maybe_add_supports(
+        %__MODULE__{
+          to_file: to_file,
+          data: %CSSEx.Parser{supports: supports},
+          valid?: true
+        } = ctx
+      ) do
+    case write_map_based_rules(to_file, supports, nil) do
+      :ok -> ctx
+      error -> add_error(ctx, error)
+    end
+  end
+
+  def maybe_add_supports(ctx), do: ctx
+
+  def maybe_add_page(
+        %__MODULE__{
+          to_file: nil,
+          acc: acc,
+          data: %CSSEx.Parser{page: page}
+        } = ctx
+      ),
+      do: %__MODULE__{ctx | acc: write_map_based_rules(nil, page, acc)}
+
+  def maybe_add_page(
+        %__MODULE__{
+          to_file: to_file,
+          data: %CSSEx.Parser{page: page},
+          valid?: true
+        } = ctx
+      ) do
+    case write_map_based_rules(to_file, page, nil) do
+      :ok -> ctx
+      error -> add_error(ctx, error)
+    end
+  end
+
+  def maybe_add_page(ctx), do: ctx
+
+  defp write_map_based_rules(nil, map_content, acc) do
+    Enum.reduce(map_content, acc, fn {rule, {ets_table, om}}, acc_i ->
+      [acc_i, rule, "{", fold_attributes_table(ets_table, om), "}"]
+    end)
+  end
+
+  defp write_map_based_rules(to_file, map_content, _acc) do
+    Enum.reduce_while(map_content, :ok, fn {rule, {ets_table, om}}, _acc ->
+      case IO.binwrite(to_file, [rule, "{"]) do
         :ok ->
           case fold_attributes_table(ets_table, om, to_file) do
             :ok ->
@@ -289,13 +348,7 @@ defmodule CSSEx.Helpers.Output do
           {:halt, error}
       end
     end)
-    |> case do
-      :ok -> ctx
-      error -> add_error(ctx, error)
-    end
   end
-
-  def maybe_add_media(ctx), do: ctx
 
   def maybe_add_keyframes(
         %__MODULE__{
@@ -384,7 +437,19 @@ defmodule CSSEx.Helpers.Output do
           acc
 
         [{_, attrs}] ->
-          [acc, selector, "{", attributes_to_list(attrs), "}"]
+          case selector do
+            [[]] ->
+              case attributes_to_list(attrs) do
+                [] ->
+                  acc
+
+                attrs_list ->
+                  [acc, attrs_list, ";"]
+              end
+
+            _ ->
+              [acc, selector, "{", attributes_to_list(attrs), "}"]
+          end
       end
     end)
   end
@@ -529,7 +594,7 @@ defmodule CSSEx.Helpers.Output do
     %{data | order_map: new_om}
   end
 
-  def write_media(to_read_from, to_write_to, om) do
+  def transfer_mergeable(to_read_from, to_write_to, om) do
     :ets.foldl(
       fn {selector, attributes}, %{c: c} = acc ->
         case :ets.lookup(to_write_to, selector) do
