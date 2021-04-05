@@ -28,13 +28,14 @@ Its main purpose is to provide a native Elixir pre-processor for CSS, in the vei
   <li><a href="#functions">Functions</a></li>
   <li><a href="#implemented_functions">Implemented Functions</a></li>
   <li><a href="#eex">EEx Blocks</a></li>
+  <li><a href="#at-rules">@at-rules</a></li>
   <li><a href="#comments">Comments</a></li>
   <li><a href="#reserved">Reserved Tokens</a></li>
 </ul>
 
 <div id="selectors"></div>
 
-#### Nested selectors and '&' concatenation
+### Nested selectors and '&' concatenation
 
 ```css
 button {
@@ -115,7 +116,7 @@ Bare selectors inside blocks create regular selection chains.
 
 <div id="variables"></div>
 
-#### Variables
+### Variables
 
 ```css
 $!a_variable red;
@@ -137,7 +138,7 @@ div {
 ```
 
 
-#### Variables that create CSS variables on declaration
+### Variables that create CSS variables on declaration
 
 ```css
 $*!primary red;
@@ -155,7 +156,7 @@ div { color: <$primary$>; }
 div { color: red; }
 ```
 
-#### Scoped Variables by file and set only if undefined variables 
+### Scoped Variables by file and set only if undefined variables 
 
 ##### file_1.cssex
 
@@ -242,7 +243,7 @@ If you referr to a variable that hasn't been declared or not in scope you'll get
 
 <div id="assigns"></div>
 
-#### Assigns
+### Assigns
 
 Assigns are the equivalent of variables but for Elixir values and they have the same options and scoping as that of variables, but instead of being declared with `$!`, `$()` and `$?`, they're declared with `@!`, `@()` and `@?`.
 
@@ -296,7 +297,7 @@ It has to be terminated with semicolon followed by newline.
 
 <div id="expandable_apply"></div>
 
-#### @expandable & @apply
+### @expandable & @apply
 
 Expandables allow you to define utility classes that can be used inside any selector to add attributes & or selectors. It allows for then `@apply`ing those blocks in different ways. You can force the `@apply` to be exactly as it was resolved when declared and keep the selector hierarchies there defined in reference to the `@expandable` selector, you can use it to be dynamically evaluated, or to apply its hierarchies in the new context while using any variable interpolation as it occurred when defining. It might sound confusing but with an example is easier to see
 
@@ -500,7 +501,7 @@ Note that you can also declare `@media` attributes inside `@expandables` and nes
 
 <div id="functions"></>
 
-#### Functions
+### Functions
 
 ```elixir
 
@@ -626,7 +627,7 @@ Functions declared in a stylesheet (even `@included` children!) become available
 
 <div id="implemented_functions"></>
 
-#### Implemented Functions
+### Implemented Functions
 
 There's 3 basic functions that ship with CSSEx and that you can use:
 
@@ -644,7 +645,7 @@ Notice they don't take units, and opacity needs a well formed float, e.g. 0.4.
 
 <div id="eex"></>
 
-#### EEx blocks
+### EEx blocks
 
 
 ```elixir
@@ -683,9 +684,82 @@ Inside EEx blocks you can use assigns with `@name_of_assign` syntax.
 
 Right now you do not have access to either cssex variables or functions declared in the stylesheet but, again, the result of evaluating the block can contain any valid cssex construct which will be parsed afterwards in the context of the stylesheet as regular cssex before moving on to the remaining stylesheet.
 
+<div id="at-rules"></div>
+
+### @at-rules (@media, @supports, @page, @font-face, @keyframes)
+
+For `@media`, `@supports` and `@page` they can be declared inside blocks and can have declarations nested inside them as well. Notice that there's no semantic evaluation of the selectors defined on the `@at-rule` so if you nest them in a way that adds to an impossible to satisfy selector it will be placed as is.
+
+#### example
+
+```css
+.test {
+  @media screen and (max-width: 600px) {
+    div.example {
+      display: none;
+    }
+
+    font-family: Arial;
+  }
+                   	
+  color: red;
+}
+
+@media screen and (max-width: 600px) {
+  .test { background-color: black; }
+}
+```
+
+##### into
+
+```css
+.test {
+  color:red
+}
+@media screen and (max-width:600px) {
+  .test div.example {
+    display:none
+  }
+  .test {
+    background-color:black;
+    font-family:Arial
+  }
+}
+```
+
+Nesting requires you to only declare the part that is to be added to the parent declarator:
+
+```css
+@media screen {
+  @media screen and (max-width: 600px) {
+     div {
+       color: red;
+     }
+  }
+}
+```
+
+##### into
+
+```css
+@media screen screen and (max-width:600px) {
+  div{
+    color:red
+  }
+}
+```
+Which is wrong of course. The nested media should have been declared with `@media and (max-width: 600px)`.
+
+These same rules apply to `@supports` and `@page`.
+
+For `@keyframes` the identifier after the `@keyframes` is used to identify it so any declarations for the same identifier will be coalesced into the same one.
+
+`@font-face` declarations each creates its own one in the final stylesheet.
+
+
 <div id="comments"></>
 
-#### Comments
+### Comments
 
 ```css
 // you can use comments in both of these forms, all text will be stripped out
@@ -700,7 +774,7 @@ other {
 
 <div id="reserved"></div>
 
-#### Reserved Tokens
+### Reserved Tokens
 
 Using any of these outside of the syntax shown before can lead to errors:
 
