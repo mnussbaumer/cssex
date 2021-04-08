@@ -1319,7 +1319,7 @@ defmodule CSSEx.Parser do
     case Map.get(scope, key) do
       nil ->
         case Map.get(local_scope, key) do
-          nil -> %{data | local_scope: Map.put(local_scope, key, val)}
+          nil -> %{data | scope: Map.put(scope, key, val)}
           _ -> data
         end
 

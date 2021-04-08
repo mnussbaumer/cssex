@@ -5,8 +5,8 @@ defmodule CSSEx.Helpers.Interpolations do
   # in either the local_scope (first match) or the global scope (second match)
   alias CSSEx.Helpers.EEX, as: HEEX
 
-  @regex_val ~r/(?<interpolation><\$.+\$>)|(?<eex_l><%=.+?end\s?%>)|(?<eex_s><%=.+?%>)/u
-  @regex_arg ~r/(?<interpolation><\$.+\$>)|<%=\s?(?<eex_l>.+?)\?end\s+?%>|<%=(?<eex_s>.+?)%>/u
+  @regex_val ~r/(?<interpolation><\$.+?\$>)|(?<eex_l><%=.+?end\s?%>)|(?<eex_s><%=.+?%>)/u
+  @regex_arg ~r/(?<interpolation><\$.+?\$>)|<%=\s?(?<eex_l>.+?)\?end\s+?%>|<%=(?<eex_s>.+?)%>/u
 
   def maybe_replace_val(<<"$::", var_name::binary>>, %{local_scope: ls})
       when is_map_key(ls, var_name),
