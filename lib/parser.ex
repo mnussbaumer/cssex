@@ -1620,7 +1620,9 @@ defmodule CSSEx.Parser do
           source_pid: source_pid,
           order_map: order_map,
           keyframes_order_map: keyframe_order_map,
-          no_count: no_count
+          no_count: no_count,
+          expandables: expandables,
+          expandables_order_map: eom
         } = data,
         ets \\ nil,
         prefix \\ nil
@@ -1657,7 +1659,9 @@ defmodule CSSEx.Parser do
       source_pid: source_pid,
       media_parent: media_parent,
       order_map: order_map,
-      keyframes_order_map: keyframe_order_map
+      keyframes_order_map: keyframe_order_map,
+      expandables: expandables,
+      expandables_order_map: eom
     }
   end
 
@@ -1707,7 +1711,9 @@ defmodule CSSEx.Parser do
           error: error,
           functions: functions,
           order_map: om,
-          keyframes_order_map: kom
+          keyframes_order_map: kom,
+          expandables: expandables,
+          expandables_order_map: eom
         }
       ) do
     %__MODULE__{
@@ -1721,7 +1727,9 @@ defmodule CSSEx.Parser do
         error: error,
         media: media,
         order_map: om,
-        keyframes_order_map: kom
+        keyframes_order_map: kom,
+        expandables: expandables,
+        expandables_order_map: eom
     }
   end
 
