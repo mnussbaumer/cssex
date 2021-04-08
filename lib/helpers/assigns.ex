@@ -65,7 +65,7 @@ defmodule CSSEx.Helpers.Assigns do
     case Map.get(assigns, key) do
       nil ->
         case Map.get(local_assigns, key) do
-          nil -> %{data | local_assigns: Map.put(local_assigns, key, val)}
+          nil -> %{data | assigns: Map.put(assigns, key, val)}
           _ -> data
         end
 

@@ -75,12 +75,14 @@ defmodule CSSEx.Parser.Test do
       "interpolation works in attributes",
       """
       $!test px;
-
+      $!width-a 10px;
+      $!width-b 20px;
       div {
         border: 2<$test$> solid red;
+        width: calc(100% - <$width-a$> - <$width-b$>);
       }
       """,
-      "div{border:2px solid red}\n"
+      "div{border:2px solid red;width:calc(100% - 10px - 20px)}\n"
     },
     {
       "interpolation works in rules and other non-attributes",
