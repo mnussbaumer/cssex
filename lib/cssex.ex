@@ -253,7 +253,13 @@ defmodule CSSEx do
         _state,
         %{dependency_graph: d_g} = data
       ) do
-    new_d_g = clean_up_deps(d_g, original_file, [error_file | dependencies])
+    to_clean_up =
+      case error_file do
+        nil -> dependencies
+        _ -> [error_file | dependencies]
+      end
+
+    new_d_g = clean_up_deps(d_g, original_file, to_clean_up)
 
     {:keep_state, %{data | dependency_graph: new_d_g},
      [{:next_event, :internal, :synch_watchers}]}

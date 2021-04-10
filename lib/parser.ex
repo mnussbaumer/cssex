@@ -234,12 +234,18 @@ defmodule CSSEx.Parser do
              [{:next_event, :internal, {:parse, IO.read(device, :all)}}]}
 
           {:error, :enoent} ->
+            file_errored =
+              case file_list do
+                [h | _] -> h
+                _ -> nil
+              end
+
             {:stop_and_reply, :normal,
              [
                {
                  :reply,
                  from,
-                 {:error, add_error(data, error_msg({:enoent, path}))}
+                 {:error, add_error(%{data | file: file_errored}, error_msg({:enoent, path}))}
                }
              ]}
         end
@@ -1084,7 +1090,7 @@ defmodule CSSEx.Parser do
         :internal,
         {:parse, [?; | rem]},
         {:parse, :value, :include},
-        %{current_value: current_key, ets: ets, base_path: base_path} = data
+        %{current_value: current_key, ets: ets, file: o_file} = data
       ) do
     file_path =
       current_key
@@ -1094,7 +1100,7 @@ defmodule CSSEx.Parser do
 
     inner_data = create_data_for_inner(%{data | line: 0, column: 0}, ets)
 
-    case __MODULE__.parse_file(inner_data, base_path, file_path) do
+    case __MODULE__.parse_file(inner_data, Path.dirname(o_file), file_path) do
       {:finished, %{file: file} = new_inner_data} ->
         new_data =
           data
@@ -1622,7 +1628,8 @@ defmodule CSSEx.Parser do
           keyframes_order_map: keyframe_order_map,
           no_count: no_count,
           expandables: expandables,
-          expandables_order_map: eom
+          expandables_order_map: eom,
+          file_list: file_list
         } = data,
         ets \\ nil,
         prefix \\ nil
@@ -1661,7 +1668,8 @@ defmodule CSSEx.Parser do
       order_map: order_map,
       keyframes_order_map: keyframe_order_map,
       expandables: expandables,
-      expandables_order_map: eom
+      expandables_order_map: eom,
+      file_list: file_list
     }
   end
 
