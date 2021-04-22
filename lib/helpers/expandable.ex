@@ -191,7 +191,7 @@ defmodule CSSEx.Helpers.Expandable do
     |> case do
       {:ok, expansion} ->
         new_2 =
-          [expansion | new_rem]
+          [expansion | [?$, 0, ?$, 0, ?$ | new_rem]]
           |> IO.iodata_to_binary()
           |> to_charlist
 

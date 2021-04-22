@@ -28,7 +28,6 @@ defmodule CSSEx.Helpers.EEX do
 
   def finish(rem, data, %{acc: eex_block, line: s_line}) do
     acc = IO.chardata_to_string(eex_block)
-
     final = eval_with_bindings(acc, data)
     new_final = :lists.flatten([to_charlist(final), ?$, 0, ?$, 0, ?$ | rem])
     :erlang.garbage_collect()
