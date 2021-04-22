@@ -313,7 +313,7 @@ defmodule CSSEx.Parser do
     new_data =
       data
       |> open_current(:function_call)
-      |> inc_col(2)
+      |> inc_col(5)
 
     case CSSEx.Helpers.Function.parse_call(new_data, rem) do
       {:ok, {new_data_2, new_rem}} ->
@@ -1110,6 +1110,7 @@ defmodule CSSEx.Parser do
           |> add_to_dependencies(file)
           |> merge_dependencies(new_inner_data)
 
+        :erlang.garbage_collect()
         {:next_state, {:parse, :next}, new_data, [{:next_event, :internal, {:parse, rem}}]}
 
       # TODO error needs to stop correctly
