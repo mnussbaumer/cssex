@@ -69,7 +69,7 @@ defmodule CSSEx.ExpandableApply.Test do
 
   test "expandable and apply 3" do
     assert {:ok, _,
-            ".hoverable{color:red}.hoverable:hover{color:rgba(204,0,0,1.0)}container .hoverable{background-color:black}.class-1{color:red}.class-1:hover{color:rgba(204,0,0,1.0)}container .class-1{background-color:black}.class-2{color:red}.class-2 .hoverable:hover{color:rgba(204,0,0,1.0)}.class-2 container .hoverable{background-color:black}.class-3{color:blue}.class-3:hover{color:rgba(0,204,0,1.0)}container .class-3{background-color:black}.class-4{color:red}.class-4:hover{color:rgba(204,0,0,1.0)}container .class-4{background-color:black}\n"} =
+            ".hoverable{color:red}.hoverable:hover{color:rgba(204,0,0,1.0)}container .hoverable{background-color:black}.class-1{color:red}.class-1:hover{color:rgba(204,0,0,1.0)}container .class-1{background-color:black}.class-2{color:red}.class-2 .hoverable:hover{color:rgba(204,0,0,1.0)}.class-2 container .hoverable{background-color:black}.class-3{color:blue}.class-3:hover{color:rgba(0,0,204,1.0)}container .class-3{background-color:black}.class-4{color:red}.class-4:hover{color:rgba(204,0,0,1.0)}container .class-4{background-color:black}\n"} =
              Parser.parse("""
              $!color red;
 
