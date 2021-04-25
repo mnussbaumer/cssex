@@ -186,5 +186,5 @@ defmodule CSSEx.RGBA do
 end
 
 defimpl String.Chars, for: CSSEx.RGBA do
-  def to_string(%CSSEx.RGBA{r: r, g: g, b: b, a: a}), do: "rgba(#{r},#{b},#{g},#{a})"
+  def to_string(%CSSEx.RGBA{r: r, g: g, b: b, a: a}), do: "rgba(#{r},#{g},#{b},#{a})"
 end
