@@ -282,9 +282,10 @@ defmodule CSSEx.Parser do
     def handle_event(
           :internal,
           {:parse, unquote(chars) ++ rem},
-          _state,
+          state,
           data
-        ) do
+        )
+        when not (is_tuple(state) and elem(state, 0) == :find_terminator) do
       new_data =
         data
         |> inc_col(2)
@@ -608,10 +609,10 @@ defmodule CSSEx.Parser do
         :internal,
         {:parse, [125 | rem]},
         {:parse, :next},
-        %{font_face: true} = data
+        %{font_face: true, font_face_count: ffc} = data
       ) do
     new_data =
-      %{data | font_face: false}
+      %{data | font_face: false, font_face_count: ffc - 1}
       |> close_current()
       |> inc_col(1)
 
@@ -1153,11 +1154,25 @@ defmodule CSSEx.Parser do
       ) do
     current_key
     |> IO.chardata_to_string()
-    |> String.split(":")
+    |> String.split(":", trim: true)
     |> case do
-      [key, val] ->
-        ckey = String.trim(key)
-        cval = String.trim(val)
+      [ckey, cval] ->
+        ## TODO add checks on attribute & value, emit warnings if invalid;
+
+        new_data =
+          data
+          |> add_to_attributes(ckey, cval)
+          |> close_current()
+          |> reset_current()
+          |> inc_col()
+          |> first_rule()
+
+        {:next_state, {:parse, :next}, new_data, [{:next_event, :internal, {:parse, rem}}]}
+
+      # this is should be actually cleaned up - the attribute value might be valid
+      # even if it's not a `src` and should be account for somehow
+      ["src" = ckey | key_rem] ->
+        cval = Enum.join(key_rem, ":")
 
         ## TODO add checks on attribute & value, emit warnings if invalid;
 
