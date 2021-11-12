@@ -1169,29 +1169,29 @@ defmodule CSSEx.Parser do
 
         {:next_state, {:parse, :next}, new_data, [{:next_event, :internal, {:parse, rem}}]}
 
-      # this is should be actually cleaned up - the attribute value might be valid
-      # even if it's not a `src` and should be account for somehow
-      ["src" = ckey | key_rem] ->
+      ## This means we had more than `key: val` which is either an error, or a value that can contain `:`, as is the case with `url()` usage, so we check if `url()` is part of the value and if it is we assume it's ok, otherwise error
+      [ckey | key_rem] ->
         cval = Enum.join(key_rem, ":")
 
-        ## TODO add checks on attribute & value, emit warnings if invalid;
+        case String.match?(cval, ~r/url\(.+\)/) do
+          true ->
+            new_data =
+              data
+              |> add_to_attributes(ckey, cval)
+              |> close_current()
+              |> reset_current()
+              |> inc_col()
+              |> first_rule()
 
-        new_data =
-          data
-          |> add_to_attributes(ckey, cval)
-          |> close_current()
-          |> reset_current()
-          |> inc_col()
-          |> first_rule()
+            {:next_state, {:parse, :next}, new_data, [{:next_event, :internal, {:parse, rem}}]}
 
-        {:next_state, {:parse, :next}, new_data, [{:next_event, :internal, {:parse, rem}}]}
+          false ->
+            # this is probably a misplaced token we should error out
+            error_msg = error_msg({:unexpected, IO.iodata_to_binary([ckey, cval])})
 
-      # this is probably a misplaced token we should error out
-      unexpected ->
-        error_msg = error_msg({:unexpected, IO.iodata_to_binary(unexpected)})
-
-        {:next_state, {:parse, :next}, add_error(data, error_msg),
-         [{:next_event, :internal, {:parse, rem}}]}
+            {:next_state, {:parse, :next}, add_error(data, error_msg),
+             [{:next_event, :internal, {:parse, rem}}]}
+        end
     end
   end
 
