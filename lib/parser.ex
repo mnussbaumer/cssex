@@ -612,7 +612,7 @@ defmodule CSSEx.Parser do
         %{font_face: true, font_face_count: ffc} = data
       ) do
     new_data =
-      %{data | font_face: false, font_face_count: ffc - 1}
+      %{data | font_face: false}
       |> close_current()
       |> inc_col(1)
 
