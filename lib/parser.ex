@@ -609,7 +609,7 @@ defmodule CSSEx.Parser do
         :internal,
         {:parse, [125 | rem]},
         {:parse, :next},
-        %{font_face: true, font_face_count: ffc} = data
+        %{font_face: true} = data
       ) do
     new_data =
       %{data | font_face: false}
