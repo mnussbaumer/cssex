@@ -4,7 +4,7 @@ defmodule Cssex.MixProject do
   def project do
     [
       app: :cssex,
-      version: "0.6.11",
+      version: "0.6.12",
       elixir: "~> 1.9",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
