@@ -224,19 +224,13 @@ defmodule CSSEx.Helpers.Shared do
   end
 
   def split_chains([head | t], []) do
-    splits =
-      head
-      |> String.split(",")
-      |> Enum.map(fn el -> String.trim(el) end)
+    splits = split_chains_comma_and_brackets(head)
 
     split_chains(t, splits)
   end
 
   def split_chains([head | t], acc) do
-    splits =
-      head
-      |> String.split(",")
-      |> Enum.map(fn el -> String.trim(el) end)
+    splits = split_chains_comma_and_brackets(head)
 
     new_acc =
       Enum.reduce(acc, [], fn chain, i_acc_1 ->
@@ -246,6 +240,42 @@ defmodule CSSEx.Helpers.Shared do
       end)
 
     split_chains(t, new_acc)
+  end
+
+  def split_chains_comma_and_brackets(head) do
+    case split_chains_maybe_brackets(head) do
+      {string, []} ->
+        string
+        |> String.split(",")
+        |> Enum.map(fn el -> String.trim(el) end)
+
+      {string, replacements} ->
+        splits_temp =
+          string
+          |> String.split(",")
+
+        Enum.reduce(replacements, splits_temp, fn {replacement, original}, splits ->
+          Enum.map(splits, fn split ->
+            String.trim(String.replace(split, replacement, original))
+          end)
+        end)
+    end
+  end
+
+  def split_chains_maybe_brackets(value) do
+    {value, acc, _} =
+      case Regex.scan(~r/\(.*?\)/, value) do
+        nil ->
+          {value, [], 0}
+
+        matches ->
+          Enum.reduce(matches, {value, [], 0}, fn [match], {string, acc, count} ->
+            replacement = "<!@>#{count}<@!>"
+            {String.replace(string, match, replacement), [{replacement, match} | acc], count + 1}
+          end)
+      end
+
+    {value, acc}
   end
 
   def search_args_split(text, n), do: search_args_split(text, n, 0, [], [])
