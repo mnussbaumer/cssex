@@ -277,7 +277,7 @@ defmodule CSSEx.Parser do
     do: {:keep_state, inc_no_count(data, -1), [{:next_event, :internal, {:parse, rem}}]}
 
   # handle comments
-  ['//', '/*']
+  [~c"//", ~c"/*"]
   |> Enum.each(fn chars ->
     def handle_event(
           :internal,
@@ -307,7 +307,7 @@ defmodule CSSEx.Parser do
   # module as it has its own parsing nuances
   def handle_event(
         :internal,
-        {:parse, '@fn::' ++ rem},
+        {:parse, ~c"@fn::" ++ rem},
         _state,
         data
       ) do
@@ -332,7 +332,7 @@ defmodule CSSEx.Parser do
   # Handle an @expandable declaration, this is on top of everything as it's only allowed on top level and should be handled specifically
   def handle_event(
         :internal,
-        {:parse, '@expandable' ++ rem},
+        {:parse, ~c"@expandable" ++ rem},
         {:parse, :next},
         %{current_chain: []} = data
       ) do
@@ -353,7 +353,7 @@ defmodule CSSEx.Parser do
 
   def handle_event(
         :internal,
-        {:parse, '@expandable' ++ rem},
+        {:parse, ~c"@expandable" ++ rem},
         state,
         data
       ) do
@@ -364,7 +364,7 @@ defmodule CSSEx.Parser do
   # Handle an @apply declaration
   def handle_event(
         :internal,
-        {:parse, '@apply' ++ rem},
+        {:parse, ~c"@apply" ++ rem},
         {:parse, :next},
         data
       ) do
@@ -475,7 +475,7 @@ defmodule CSSEx.Parser do
 
   def handle_event(
         :internal,
-        {:parse, '@fn' ++ rem},
+        {:parse, ~c"@fn" ++ rem},
         {:parse, :next},
         data
       ) do
@@ -490,7 +490,7 @@ defmodule CSSEx.Parser do
 
   def handle_event(
         :internal,
-        {:parse, '@include' ++ rem},
+        {:parse, ~c"@include" ++ rem},
         {:parse, :next},
         data
       ) do
@@ -504,7 +504,7 @@ defmodule CSSEx.Parser do
 
   def handle_event(
         :internal,
-        {:parse, '@import' ++ rem},
+        {:parse, ~c"@import" ++ rem},
         {:parse, :next},
         data
       ) do
@@ -518,7 +518,7 @@ defmodule CSSEx.Parser do
 
   def handle_event(
         :internal,
-        {:parse, '@charset' ++ rem},
+        {:parse, ~c"@charset" ++ rem},
         {:parse, :next},
         data
       ) do
@@ -532,7 +532,7 @@ defmodule CSSEx.Parser do
 
   def handle_event(
         :internal,
-        {:parse, '@media' ++ rem},
+        {:parse, ~c"@media" ++ rem},
         {:parse, :next},
         data
       ) do
@@ -546,7 +546,7 @@ defmodule CSSEx.Parser do
 
   def handle_event(
         :internal,
-        {:parse, '@supports' ++ rem},
+        {:parse, ~c"@supports" ++ rem},
         {:parse, :next},
         data
       ) do
@@ -561,7 +561,7 @@ defmodule CSSEx.Parser do
 
   def handle_event(
         :internal,
-        {:parse, '@page' ++ rem},
+        {:parse, ~c"@page" ++ rem},
         {:parse, :next},
         data
       ) do
@@ -575,7 +575,7 @@ defmodule CSSEx.Parser do
 
   def handle_event(
         :internal,
-        {:parse, '@keyframes' ++ rem},
+        {:parse, ~c"@keyframes" ++ rem},
         {:parse, :next},
         data
       ) do
@@ -590,7 +590,7 @@ defmodule CSSEx.Parser do
 
   def handle_event(
         :internal,
-        {:parse, '@font-face' ++ rem},
+        {:parse, ~c"@font-face" ++ rem},
         {:parse, :next},
         %{current_chain: [], font_face: false, font_face_count: ffc} = data
       ) do
@@ -702,7 +702,7 @@ defmodule CSSEx.Parser do
   # we move to a different parse step
   def handle_event(
         :internal,
-        {:parse, '<%' ++ _ = full},
+        {:parse, ~c"<%" ++ _ = full},
         _state,
         data
       ) do
@@ -820,7 +820,7 @@ defmodule CSSEx.Parser do
   # parsing it
   def handle_event(
         :internal,
-        {:parse, '@!' ++ rem},
+        {:parse, ~c"@!" ++ rem},
         {:parse, :next},
         data
       ) do
@@ -835,7 +835,7 @@ defmodule CSSEx.Parser do
 
   def handle_event(
         :internal,
-        {:parse, '@()' ++ rem},
+        {:parse, ~c"@()" ++ rem},
         {:parse, :next},
         data
       ) do
@@ -850,7 +850,7 @@ defmodule CSSEx.Parser do
 
   def handle_event(
         :internal,
-        {:parse, '@?' ++ rem},
+        {:parse, ~c"@?" ++ rem},
         {:parse, :next},
         data
       ) do
@@ -866,7 +866,7 @@ defmodule CSSEx.Parser do
   # We found a var assignment when searching for the next token, prepare for parsing it
   def handle_event(
         :internal,
-        {:parse, '$!' ++ rem},
+        {:parse, ~c"$!" ++ rem},
         {:parse, :next},
         data
       ) do
@@ -881,7 +881,7 @@ defmodule CSSEx.Parser do
 
   def handle_event(
         :internal,
-        {:parse, '$*!' ++ rem},
+        {:parse, ~c"$*!" ++ rem},
         {:parse, :next},
         data
       ) do
@@ -897,7 +897,7 @@ defmodule CSSEx.Parser do
 
   def handle_event(
         :internal,
-        {:parse, '$()' ++ rem},
+        {:parse, ~c"$()" ++ rem},
         {:parse, :next},
         data
       ) do
@@ -912,7 +912,7 @@ defmodule CSSEx.Parser do
 
   def handle_event(
         :internal,
-        {:parse, '$*()' ++ rem},
+        {:parse, ~c"$*()" ++ rem},
         {:parse, :next},
         data
       ) do
@@ -928,7 +928,7 @@ defmodule CSSEx.Parser do
 
   def handle_event(
         :internal,
-        {:parse, '$?' ++ rem},
+        {:parse, ~c"$?" ++ rem},
         {:parse, :next},
         data
       ) do
@@ -943,7 +943,7 @@ defmodule CSSEx.Parser do
 
   def handle_event(
         :internal,
-        {:parse, '$*?' ++ rem},
+        {:parse, ~c"$*?" ++ rem},
         {:parse, :next},
         data
       ) do
@@ -1049,7 +1049,7 @@ defmodule CSSEx.Parser do
   # parsed content and create an anonymous fun
   def handle_event(
         :internal,
-        {:parse, '->' ++ rem},
+        {:parse, ~c"->" ++ rem},
         {:parse, :value, :current_function},
         data
       ) do
@@ -1074,7 +1074,8 @@ defmodule CSSEx.Parser do
         {:parse, [char | rem]},
         {:parse, :next},
         data
-      ) do
+      )
+      when char != ?; do
     new_data =
       data
       |> Map.put(:current_key, [char])
@@ -1216,6 +1217,9 @@ defmodule CSSEx.Parser do
 
     {:next_state, {:parse, :next}, new_data, [{:next_event, :internal, {:parse, rem}}]}
   end
+
+  def handle_event(:internal, {:parse, [?; | rem]}, {:parse, :next}, _),
+    do: {:keep_state_and_data, [{:next_event, :internal, {:parse, rem}}]}
 
   def handle_event(
         :internal,
