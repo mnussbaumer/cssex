@@ -582,19 +582,30 @@ defmodule CSSEx.Helpers.Output do
         attr_key,
         attr_val
       ) do
+    actual_chain =
+      case chain do
+        list when is_list(list) ->
+          list
+          |> List.flatten()
+          |> Enum.join(" ")
+
+        binary when is_binary(binary) ->
+          binary
+      end
+
     new_om =
-      case :ets.lookup(ets, chain) do
+      case :ets.lookup(ets, actual_chain) do
         [{_, existing}] ->
-          :ets.insert(ets, {chain, Map.put(existing, attr_key, attr_val)})
+          :ets.insert(ets, {actual_chain, Map.put(existing, attr_key, attr_val)})
           om
 
         [] ->
-          :ets.insert(ets, {chain, Map.put(%{}, attr_key, attr_val)})
+          :ets.insert(ets, {actual_chain, Map.put(%{}, attr_key, attr_val)})
 
           om
           |> Map.put(:c, c + 1)
-          |> Map.put(chain, c)
-          |> Map.put(c, chain)
+          |> Map.put(actual_chain, c)
+          |> Map.put(c, actual_chain)
       end
 
     %{data | order_map: new_om}
