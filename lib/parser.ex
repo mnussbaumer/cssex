@@ -797,7 +797,8 @@ defmodule CSSEx.Parser do
           {:parse, [unquote(char) | rem]},
           {:parse, :value, type},
           data
-        ) do
+        )
+        when type not in [:current_var] do
       # we'll always inc the column counter no matter what
       new_data = inc_col(data)
 
