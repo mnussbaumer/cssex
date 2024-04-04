@@ -53,8 +53,8 @@ defmodule CSSEx.Helpers.EEX do
     {:error, new_data}
   end
 
-  def do_parse('<% end %>' ++ rem, data, %{acc: acc} = state) do
-    %{state | acc: [acc | '<% end %>']}
+  def do_parse(~c"<% end %>" ++ rem, data, %{acc: acc} = state) do
+    %{state | acc: [acc | ~c"<% end %>"]}
     |> inc_col(9)
     |> inc_level(-1)
     |> case do
@@ -63,25 +63,25 @@ defmodule CSSEx.Helpers.EEX do
     end
   end
 
-  def do_parse('<%' ++ rem, data, %{acc: acc, level: level} = state) do
+  def do_parse(~c"<%" ++ rem, data, %{acc: acc, level: level} = state) do
     new_state =
       state
       |> inc_col(2)
       |> inc_level()
 
-    do_parse(rem, data, %{new_state | acc: [acc | '<%'], level: level + 1})
+    do_parse(rem, data, %{new_state | acc: [acc | ~c"<%"], level: level + 1})
   end
 
-  def do_parse('do %>' ++ rem, data, %{acc: acc} = state) do
+  def do_parse(~c"do %>" ++ rem, data, %{acc: acc} = state) do
     new_state =
       state
       |> inc_col(5)
 
-    do_parse(rem, data, %{new_state | acc: [acc | 'do %>']})
+    do_parse(rem, data, %{new_state | acc: [acc | ~c"do %>"]})
   end
 
-  def do_parse('%>' ++ rem, data, %{acc: acc} = state) do
-    %{state | acc: [acc | '%>']}
+  def do_parse(~c"%>" ++ rem, data, %{acc: acc} = state) do
+    %{state | acc: [acc | ~c"%>"]}
     |> inc_col(2)
     |> inc_level(-1)
     |> case do

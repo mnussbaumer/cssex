@@ -18,7 +18,7 @@ defmodule CSSEx.Helpers.Function do
     # we reached the end of the function declaration
     def parse(
           %{current_value: current_value, current_function: fn_iodata} = data,
-          'end;' ++ [unquote(char) | rem]
+          ~c"end;" ++ [unquote(char) | rem]
         ) do
       cval = String.trim(IO.chardata_to_string(current_value))
       fun_string = String.trim(IO.chardata_to_string(fn_iodata))

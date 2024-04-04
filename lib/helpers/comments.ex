@@ -5,17 +5,17 @@ defmodule CSSEx.Helpers.Comments do
   @line_terminators CSSEx.Helpers.LineTerminators.code_points()
 
   def parse(
-        '*/' ++ rem,
+        ~c"*/" ++ rem,
         data,
-        '/*'
+        ~c"/*"
       ),
       do: {:ok, {inc_col(data, 2), rem}}
 
   Enum.each(@line_terminators, fn char ->
-    def parse([unquote(char) | rem], data, '//'),
+    def parse([unquote(char) | rem], data, ~c"//"),
       do: {:ok, {inc_line(data), rem}}
 
-    def parse([unquote(char) | rem], data, '/*' = ctype),
+    def parse([unquote(char) | rem], data, ~c"/*" = ctype),
       do: parse(rem, inc_line(data), ctype)
   end)
 
