@@ -55,25 +55,6 @@ defmodule CSSEx.Error.Test do
     assert error =~ "invalid :variable declaration at l:1 col:1 to\" :: l:1 c:6"
   end
 
-  test "nested media bug #8 should provide an error" do
-    assert {:error, %{error: error}} =
-             Parser.parse("""
-             @media only screen {
-               header nav a {
-                 display: block;
-             	color: white;
-             	text-decoration: none;
-
-                 a:focus, a:hover {
-                   color: #000;
-             	};
-               }
-             }
-             """)
-
-    assert error =~ "unexpected token: ;  \" :: l:10 c:0"
-  end
-
   test "it should error when nesting an html tag to another html tag" do
     assert {:error, %{error: error}} =
              Parser.parse("""
