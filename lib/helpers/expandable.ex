@@ -5,7 +5,7 @@ defmodule CSSEx.Helpers.Expandable do
   @moduledoc false
 
   def parse(rem, data) do
-    case CSSEx.Helpers.Shared.search_for(rem, '{') do
+    case CSSEx.Helpers.Shared.search_for(rem, ~c"{") do
       {:ok, {new_rem, selector}} ->
         case validate_selector(selector, data) do
           {:ok, validated} ->
@@ -150,7 +150,7 @@ defmodule CSSEx.Helpers.Expandable do
     do: %{data | order_map: %{c: 0}, current_chain: [validated]}
 
   def make_apply(rem, %{expandables: expandables} = _data) do
-    {:ok, {new_rem, identifiers}} = CSSEx.Helpers.Shared.search_for(rem, ';')
+    {:ok, {new_rem, identifiers}} = CSSEx.Helpers.Shared.search_for(rem, ~c";")
 
     identifiers
     |> IO.chardata_to_string()

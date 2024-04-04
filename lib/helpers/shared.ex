@@ -311,7 +311,7 @@ defmodule CSSEx.Helpers.Shared do
 
   def search_for(content, target), do: search_for(content, target, [])
 
-  Enum.each(['{', ';'], fn chars ->
+  Enum.each([~c"{", ~c";"], fn chars ->
     def search_for(unquote(chars) ++ rem, unquote(chars), acc), do: {:ok, {rem, acc}}
   end)
 

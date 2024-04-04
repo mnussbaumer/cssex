@@ -438,6 +438,15 @@ defmodule CSSEx.Helpers.Output do
 
         [{_, attrs}] ->
           case selector do
+            "" ->
+              case attributes_to_list(attrs) do
+                [] ->
+                  acc
+
+                attrs_list ->
+                  [acc, attrs_list, ";"]
+              end
+
             [[]] ->
               case attributes_to_list(attrs) do
                 [] ->
@@ -596,11 +605,11 @@ defmodule CSSEx.Helpers.Output do
     new_om =
       case :ets.lookup(ets, actual_chain) do
         [{_, existing}] ->
-          :ets.insert(ets, {actual_chain, Map.put(existing, attr_key, attr_val)})
+          :ets.insert(ets, {actual_chain, Map.put(existing, attr_key, String.trim(attr_val))})
           om
 
         [] ->
-          :ets.insert(ets, {actual_chain, Map.put(%{}, attr_key, attr_val)})
+          :ets.insert(ets, {actual_chain, Map.put(%{}, attr_key, String.trim(attr_val))})
 
           om
           |> Map.put(:c, c + 1)

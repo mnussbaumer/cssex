@@ -1364,6 +1364,8 @@ defmodule CSSEx.Parser do
       ) do
     case maybe_replace_val(val, data) do
       {:ok, new_val} ->
+        new_val = String.trim(new_val)
+
         case HShared.valid_attribute_kv?(key, new_val) do
           true ->
             case :ets.lookup(ets, ffc) do
@@ -1386,6 +1388,8 @@ defmodule CSSEx.Parser do
   def add_to_attributes(data, key, val) do
     case maybe_replace_val(val, data) do
       {:ok, new_val} ->
+        new_val = String.trim(new_val)
+
         case HShared.valid_attribute_kv?(key, new_val) do
           true ->
             Output.write_element(data, key, new_val)
