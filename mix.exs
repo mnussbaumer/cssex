@@ -12,7 +12,7 @@ defmodule Cssex.MixProject do
       source_url: "https://github.com/mnussbaumer/cssex",
       homepage_url: "https://hexdocs.pm/cssex/readme.html",
       docs: [
-        main: "CSSEx",
+        main: "README.md",
         extras: ["README.md"]
       ],
       description: "A CSS preprocessor written in Elixir",
