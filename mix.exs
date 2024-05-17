@@ -4,8 +4,8 @@ defmodule Cssex.MixProject do
   def project do
     [
       app: :cssex,
-      version: "0.9.0",
-      elixir: "~> 1.9",
+      version: "1.0.0",
+      elixir: "~> 1.11",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       name: "CSSEx",
@@ -37,7 +37,7 @@ defmodule Cssex.MixProject do
   defp deps do
     [
       {:file_system, "~> 1.0"},
-      {:ex_doc, "~> 0.24", only: :dev, runtime: false}
+      {:ex_doc, "~> 0.32", only: :dev, runtime: false}
     ]
   end
 end
