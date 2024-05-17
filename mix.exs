@@ -4,15 +4,15 @@ defmodule Cssex.MixProject do
   def project do
     [
       app: :cssex,
-      version: "0.8.0",
-      elixir: "~> 1.9",
+      version: "1.0.0",
+      elixir: "~> 1.11",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       name: "CSSEx",
       source_url: "https://github.com/mnussbaumer/cssex",
       homepage_url: "https://hexdocs.pm/cssex/readme.html",
       docs: [
-        main: "CSSEx",
+        main: "readme",
         extras: ["README.md"]
       ],
       description: "A CSS preprocessor written in Elixir",
@@ -36,8 +36,8 @@ defmodule Cssex.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:file_system, "~> 0.2"},
-      {:ex_doc, "~> 0.24", only: :dev, runtime: false}
+      {:file_system, "~> 1.0"},
+      {:ex_doc, "~> 0.32", only: :dev, runtime: false}
     ]
   end
 end
