@@ -15,7 +15,7 @@ defmodule CSSEx do
   @timeout 15_000
 
   defstruct entry_points: [],
-            pretty_print: false,
+            pretty_print?: false,
             file_watch: false,
             watchers: %{},
             no_start: false,
@@ -26,7 +26,7 @@ defmodule CSSEx do
 
   @type t :: %__MODULE__{
           entry_points: list(Keyword.t()),
-          pretty_print: boolean,
+          pretty_print?: boolean,
           file_watch: boolean,
           no_start: boolean
         }
@@ -121,7 +121,7 @@ defmodule CSSEx do
   end
 
   # for each entry point check if it exists, if it does start a parser under a monitor, if it not log an error
-  def handle_event(:internal, :start, _, %{entry_points: entries} = data) do
+  def handle_event(:internal, :start, _, %{entry_points: entries, pretty_print?: pp?} = data) do
     self_pid = self()
 
     new_monitors =
@@ -129,7 +129,7 @@ defmodule CSSEx do
         case File.exists?(path) do
           true ->
             {_pid, monitor} =
-              Process.spawn(__MODULE__, :parse_file, [path, final, self_pid], [:monitor])
+              Process.spawn(__MODULE__, :parse_file, [path, final, self_pid, pp?], [:monitor])
 
             Map.put(monitors_acc, monitor, path)
 
@@ -147,7 +147,8 @@ defmodule CSSEx do
         :internal,
         {:process, file_path},
         _,
-        %{entry_points: entries, monitors: monitors, reprocess: reprocess} = data
+        %{entry_points: entries, monitors: monitors, reprocess: reprocess, pretty_print?: pp?} =
+          data
       ) do
     case Map.get(monitors, file_path) do
       nil ->
@@ -155,7 +156,9 @@ defmodule CSSEx do
         final_file = Map.get(entries, file_path)
 
         {_pid, monitor} =
-          Process.spawn(__MODULE__, :parse_file, [file_path, final_file, self_pid], [:monitor])
+          Process.spawn(__MODULE__, :parse_file, [file_path, final_file, self_pid, pp?], [
+            :monitor
+          ])
 
         new_monitors = Map.put(monitors, monitor, file_path)
         new_reprocess = Enum.filter(reprocess, fn path -> file_path == path end)
@@ -465,8 +468,10 @@ defmodule CSSEx do
   end
 
   @doc false
-  def parse_file(path, final_file, self_pid) do
-    case CSSEx.Parser.parse_file(nil, Path.dirname(path), Path.basename(path), final_file) do
+  def parse_file(path, final_file, self_pid, pp?) do
+    case CSSEx.Parser.parse_file(nil, Path.dirname(path), Path.basename(path), final_file,
+           pretty_print?: pp?
+         ) do
       {:ok, parser, _} -> send(self_pid, {:parsed, parser})
       {:error, parser} -> send(self_pid, {:parsed, {path, parser}})
     end

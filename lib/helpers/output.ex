@@ -3,14 +3,14 @@ defmodule CSSEx.Helpers.Output do
 
   @enforce_keys [:data]
   @temp_ext "-cssex.temp"
-  defstruct [:data, :to_file, :temp_file, :file_path, valid?: true, acc: []]
+  defstruct [:data, :to_file, :temp_file, :file_path, valid?: true, acc: [], pretty_print?: false]
 
-  def do_finish(%{to_file: nil} = data) do
-    %__MODULE__{data: data}
+  def do_finish(%{to_file: nil, pretty_print?: pp?} = data) do
+    %__MODULE__{data: data, pretty_print?: pp? || true}
     |> finish()
   end
 
-  def do_finish(%{to_file: to_file} = data) do
+  def do_finish(%{to_file: to_file, pretty_print?: pp?} = data) do
     random_string =
       Enum.shuffle(1..255)
       |> Enum.take(12)
@@ -18,7 +18,13 @@ defmodule CSSEx.Helpers.Output do
       |> Base.encode16(padding: false)
 
     temp_file = "#{to_file}#{random_string}#{@temp_ext}"
-    base = %__MODULE__{data: data, file_path: to_file, temp_file: temp_file}
+
+    base = %__MODULE__{
+      data: data,
+      file_path: to_file,
+      temp_file: temp_file,
+      pretty_print?: pp?
+    }
 
     case File.mkdir_p(Path.dirname(to_file)) do
       :ok ->
@@ -43,10 +49,14 @@ defmodule CSSEx.Helpers.Output do
     |> maybe_add_font_faces()
     |> maybe_add_css_variables()
     |> maybe_add_expandables()
+    |> maybe_add_formatting_new_line()
     |> add_general()
+    |> maybe_add_formatting_new_line()
     |> maybe_add_media()
     |> maybe_add_keyframes()
+    |> maybe_add_formatting_new_line()
     |> maybe_add_supports()
+    |> maybe_add_formatting_new_line()
     |> maybe_add_page()
     |> add_final_new_line()
     |> case do
@@ -55,6 +65,22 @@ defmodule CSSEx.Helpers.Output do
     end
   end
 
+  def maybe_add_formatting_new_line(%__MODULE__{pretty_print?: true} = ctx) do
+    case ctx do
+      %__MODULE__{to_file: nil, acc: acc} ->
+        %__MODULE__{ctx | acc: ["\n", acc]}
+
+      %__MODULE__{to_file: to_file, valid?: true} ->
+        case IO.binwrite(to_file, "\n") do
+          :ok -> ctx
+          error -> add_error(ctx, error)
+        end
+    end
+  end
+
+  def maybe_add_formatting_new_line(ctx),
+    do: ctx
+
   def maybe_add_charset(
         %__MODULE__{
           to_file: nil,
@@ -62,8 +88,10 @@ defmodule CSSEx.Helpers.Output do
           data: %CSSEx.Parser{charset: charset}
         } = ctx
       )
-      when is_binary(charset),
-      do: %__MODULE__{ctx | acc: [build_charset(charset), acc]}
+      when is_binary(charset) do
+    %__MODULE__{ctx | acc: [build_charset(charset), acc]}
+    |> maybe_add_formatting_new_line()
+  end
 
   def maybe_add_charset(
         %__MODULE__{
@@ -74,8 +102,12 @@ defmodule CSSEx.Helpers.Output do
       )
       when is_binary(charset) do
     case IO.binwrite(to_file, build_charset(charset)) do
-      :ok -> ctx
-      error -> add_error(ctx, error)
+      :ok ->
+        ctx
+        |> maybe_add_formatting_new_line()
+
+      error ->
+        add_error(ctx, error)
     end
   end
 
@@ -89,8 +121,9 @@ defmodule CSSEx.Helpers.Output do
           acc: acc,
           data: %CSSEx.Parser{imports: imports}
         } = ctx
-      ),
-      do: %__MODULE__{ctx | acc: [acc, imports]}
+      ) do
+    %__MODULE__{ctx | acc: [acc, imports]}
+  end
 
   def maybe_add_imports(
         %__MODULE__{
@@ -100,8 +133,11 @@ defmodule CSSEx.Helpers.Output do
         } = ctx
       ) do
     case IO.binwrite(to_file, imports) do
-      :ok -> ctx
-      error -> add_error(ctx, error)
+      :ok ->
+        ctx
+
+      error ->
+        add_error(ctx, error)
     end
   end
 
@@ -111,21 +147,29 @@ defmodule CSSEx.Helpers.Output do
         %__MODULE__{
           to_file: nil,
           acc: acc,
-          data: %CSSEx.Parser{ets_fontface: ets}
+          data: %CSSEx.Parser{ets_fontface: ets},
+          pretty_print?: pp?
         } = ctx
-      ),
-      do: %__MODULE__{ctx | acc: [acc, fold_font_faces_table(ets)]}
+      ) do
+    %__MODULE__{ctx | acc: [acc, fold_font_faces_table(ets, pp?)]}
+    |> maybe_add_formatting_new_line()
+  end
 
   def maybe_add_font_faces(
         %__MODULE__{
           to_file: to_file,
           data: %CSSEx.Parser{ets_fontface: ets},
-          valid?: true
+          valid?: true,
+          pretty_print?: pp?
         } = ctx
       ) do
-    case fold_font_faces_table(ets, to_file) do
-      :ok -> ctx
-      error -> add_error(ctx, error)
+    case fold_font_faces_table(ets, to_file, pretty_print?: pp?) do
+      :ok ->
+        ctx
+        |> maybe_add_formatting_new_line()
+
+      error ->
+        add_error(ctx, error)
     end
   end
 
@@ -133,12 +177,19 @@ defmodule CSSEx.Helpers.Output do
         %__MODULE__{
           to_file: nil,
           acc: acc,
-          data: %CSSEx.Parser{ets: ets}
+          data: %CSSEx.Parser{ets: ets},
+          pretty_print?: pp?
         } = ctx
       ) do
+    opts = [pretty_print?: pp?]
+
     case take_root(ets) do
-      [] -> ctx
-      [{k, values}] -> %__MODULE__{ctx | acc: [acc | [k, "{", values, "}"]]}
+      [] ->
+        ctx
+
+      [{k, values}] ->
+        %__MODULE__{ctx | acc: [acc | [k, open_curly(opts), values, close_curly(opts)]]}
+        |> maybe_add_formatting_new_line()
     end
   end
 
@@ -146,17 +197,24 @@ defmodule CSSEx.Helpers.Output do
         %__MODULE__{
           to_file: to_file,
           data: %CSSEx.Parser{ets: ets},
-          valid?: true
+          valid?: true,
+          pretty_print?: pp?
         } = ctx
       ) do
+    opts = [pretty_print?: pp?]
+
     case take_root(ets) do
       [] ->
         ctx
 
       [{k, values}] ->
-        case IO.binwrite(to_file, [k, "{", values, "}"]) do
-          :ok -> ctx
-          error -> add_error(ctx, error)
+        case IO.binwrite(to_file, [k, open_curly(opts), values, close_curly(opts)]) do
+          :ok ->
+            ctx
+            |> maybe_add_formatting_new_line()
+
+          error ->
+            add_error(ctx, error)
         end
     end
   end
@@ -169,9 +227,12 @@ defmodule CSSEx.Helpers.Output do
         %__MODULE__{
           to_file: nil,
           acc: acc,
-          data: %CSSEx.Parser{expandables: expandables, expandables_order_map: %{c: c} = eom}
+          data: %CSSEx.Parser{expandables: expandables, expandables_order_map: %{c: c} = eom},
+          pretty_print?: pp?
         } = ctx
       ) do
+    opts = [pretty_print?: pp?]
+
     new_acc =
       Enum.reduce(0..c, [], fn n, acc_i ->
         case Map.get(eom, n) do
@@ -184,7 +245,7 @@ defmodule CSSEx.Helpers.Output do
             selector_list =
               case selector_exp do
                 [] -> ""
-                _ -> [selector, "{", selector_exp, "}"]
+                _ -> [selector, open_curly(opts), selector_exp, close_curly(opts)]
               end
 
             [acc_i | [selector_list | other_selectors]]
@@ -198,9 +259,12 @@ defmodule CSSEx.Helpers.Output do
         %__MODULE__{
           to_file: to_file,
           data: %CSSEx.Parser{expandables: expandables, expandables_order_map: %{c: c} = eom},
-          valid?: true
+          valid?: true,
+          pretty_print?: pp?
         } = ctx
       ) do
+    opts = [pretty_print?: pp?]
+
     Enum.reduce_while(0..c, :ok, fn n, acc ->
       case Map.get(eom, n) do
         nil ->
@@ -212,7 +276,7 @@ defmodule CSSEx.Helpers.Output do
           selector_list =
             case selector_exp do
               [] -> ""
-              _ -> [selector, "{", selector_exp, "}"]
+              _ -> [selector, open_curly(opts), selector_exp, close_curly(opts)]
             end
 
           case IO.binwrite(to_file, [selector_list, other_selectors]) do
@@ -231,19 +295,21 @@ defmodule CSSEx.Helpers.Output do
         %__MODULE__{
           to_file: nil,
           acc: acc,
-          data: %CSSEx.Parser{ets: ets, order_map: om}
+          data: %CSSEx.Parser{ets: ets, order_map: om},
+          pretty_print?: pp?
         } = ctx
       ),
-      do: %__MODULE__{ctx | acc: [acc | fold_attributes_table(ets, om)]}
+      do: %__MODULE__{ctx | acc: [acc | fold_attributes_table(ets, om, pretty_print?: pp?)]}
 
   def add_general(
         %__MODULE__{
           to_file: to_file,
           data: %CSSEx.Parser{ets: ets, order_map: om},
-          valid?: true
+          valid?: true,
+          pretty_print?: pp?
         } = ctx
       ) do
-    case fold_attributes_table(ets, om, to_file) do
+    case fold_attributes_table(ets, om, to_file, pretty_print?: pp?) do
       :ok -> ctx
       error -> add_error(ctx, error)
     end
@@ -255,19 +321,21 @@ defmodule CSSEx.Helpers.Output do
         %__MODULE__{
           to_file: nil,
           acc: acc,
-          data: %CSSEx.Parser{media: media}
+          data: %CSSEx.Parser{media: media},
+          pretty_print?: pp?
         } = ctx
       ),
-      do: %__MODULE__{ctx | acc: write_map_based_rules(nil, media, acc)}
+      do: %__MODULE__{ctx | acc: write_map_based_rules(nil, media, acc, pretty_print?: pp?)}
 
   def maybe_add_media(
         %__MODULE__{
           to_file: to_file,
           data: %CSSEx.Parser{media: media},
-          valid?: true
+          valid?: true,
+          pretty_print?: pp?
         } = ctx
       ) do
-    case write_map_based_rules(to_file, media, nil) do
+    case write_map_based_rules(to_file, media, nil, pretty_print?: pp?) do
       :ok -> ctx
       error -> add_error(ctx, error)
     end
@@ -279,19 +347,21 @@ defmodule CSSEx.Helpers.Output do
         %__MODULE__{
           to_file: nil,
           acc: acc,
-          data: %CSSEx.Parser{supports: supports}
+          data: %CSSEx.Parser{supports: supports},
+          pretty_print?: pp?
         } = ctx
       ),
-      do: %__MODULE__{ctx | acc: write_map_based_rules(nil, supports, acc)}
+      do: %__MODULE__{ctx | acc: write_map_based_rules(nil, supports, acc, pretty_print?: pp?)}
 
   def maybe_add_supports(
         %__MODULE__{
           to_file: to_file,
           data: %CSSEx.Parser{supports: supports},
-          valid?: true
+          valid?: true,
+          pretty_print?: pp?
         } = ctx
       ) do
-    case write_map_based_rules(to_file, supports, nil) do
+    case write_map_based_rules(to_file, supports, nil, pretty_print?: pp?) do
       :ok -> ctx
       error -> add_error(ctx, error)
     end
@@ -303,19 +373,21 @@ defmodule CSSEx.Helpers.Output do
         %__MODULE__{
           to_file: nil,
           acc: acc,
-          data: %CSSEx.Parser{page: page}
+          data: %CSSEx.Parser{page: page},
+          pretty_print?: pp?
         } = ctx
       ),
-      do: %__MODULE__{ctx | acc: write_map_based_rules(nil, page, acc)}
+      do: %__MODULE__{ctx | acc: write_map_based_rules(nil, page, acc, pretty_print?: pp?)}
 
   def maybe_add_page(
         %__MODULE__{
           to_file: to_file,
           data: %CSSEx.Parser{page: page},
-          valid?: true
+          valid?: true,
+          pretty_print?: pp?
         } = ctx
       ) do
-    case write_map_based_rules(to_file, page, nil) do
+    case write_map_based_rules(to_file, page, nil, pretty_print?: pp?) do
       :ok -> ctx
       error -> add_error(ctx, error)
     end
@@ -323,26 +395,30 @@ defmodule CSSEx.Helpers.Output do
 
   def maybe_add_page(ctx), do: ctx
 
-  defp write_map_based_rules(nil, map_content, acc) do
+  defp write_map_based_rules(nil, map_content, acc, options) when is_list(options) do
+    opts = Keyword.put(options, :indent, 4)
+
     Enum.reduce(map_content, acc, fn {rule, {ets_table, om}}, acc_i ->
-      case fold_attributes_table(ets_table, om) do
+      case fold_attributes_table(ets_table, om, opts) do
         [] ->
           acc_i
 
         folded ->
-          [acc_i, rule, "{", folded, "}"]
+          [acc_i, rule, open_curly(opts), folded, close_curly(opts)]
       end
     end)
   end
 
-  defp write_map_based_rules(to_file, map_content, _acc) do
+  defp write_map_based_rules(to_file, map_content, _acc, options) when is_list(options) do
+    opts = Keyword.put(options, :indent, 4)
+
     Enum.reduce_while(map_content, :ok, fn {rule, {ets_table, om}}, _acc ->
-      case fold_attributes_table(ets_table, om) do
+      case fold_attributes_table(ets_table, om, opts) do
         [] ->
           {:cont, :ok}
 
         folded ->
-          case IO.binwrite(to_file, [rule, "{", folded, "}"]) do
+          case IO.binwrite(to_file, [rule, open_curly(opts), folded, close_curly(opts)]) do
             :ok -> {:cont, :ok}
             error -> {:halt, error}
           end
@@ -354,19 +430,21 @@ defmodule CSSEx.Helpers.Output do
         %__MODULE__{
           to_file: nil,
           acc: acc,
-          data: %CSSEx.Parser{ets_keyframes: ets, keyframes_order_map: om}
+          data: %CSSEx.Parser{ets_keyframes: ets, keyframes_order_map: om},
+          pretty_print?: pp?
         } = ctx
       ),
-      do: %__MODULE__{ctx | acc: [acc | fold_mapped_table(ets, om)]}
+      do: %__MODULE__{ctx | acc: [acc | fold_mapped_table(ets, om, pretty_print?: pp?)]}
 
   def maybe_add_keyframes(
         %__MODULE__{
           to_file: to_file,
           data: %CSSEx.Parser{ets_keyframes: ets, keyframes_order_map: om},
-          valid?: true
+          valid?: true,
+          pretty_print?: pp?
         } = ctx
       ) do
-    case fold_mapped_table(ets, om, to_file) do
+    case fold_mapped_table(ets, om, to_file, pretty_print?: pp?) do
       :ok -> ctx
       error -> add_error(ctx, error)
     end
@@ -415,17 +493,31 @@ defmodule CSSEx.Helpers.Output do
 
   def add_final_new_line(ctx), do: ctx
 
-  def fold_attributes_table(ets) do
+  def fold_attributes_table(ets),
+    do: fold_attributes_table(ets, [])
+
+  def fold_attributes_table(ets, options) when is_list(options) do
     :ets.foldl(
       fn {selector, attributes}, acc ->
-        [acc, selector, "{", attributes_to_list(attributes), "}"]
+        [
+          acc,
+          selector,
+          open_curly(options),
+          attributes_to_list(attributes, Keyword.put(options, :indent, 4)),
+          close_curly(options)
+        ]
       end,
       [],
       ets
     )
   end
 
-  def fold_attributes_table(ets, %{c: c} = om) do
+  def fold_attributes_table(ets, %{c: _} = om),
+    do: fold_attributes_table(ets, om, [])
+
+  def fold_attributes_table(ets, %{c: c} = om, options) when is_list(options) do
+    opts = Keyword.put(options, :indent, 4)
+
     Enum.reduce(0..c, [], fn n, acc ->
       selector = Map.get(om, n)
 
@@ -439,7 +531,7 @@ defmodule CSSEx.Helpers.Output do
         [{_, attrs}] ->
           case selector do
             "" ->
-              case attributes_to_list(attrs) do
+              case attributes_to_list(attrs, opts) do
                 [] ->
                   acc
 
@@ -448,7 +540,7 @@ defmodule CSSEx.Helpers.Output do
               end
 
             [[]] ->
-              case attributes_to_list(attrs) do
+              case attributes_to_list(attrs, opts) do
                 [] ->
                   acc
 
@@ -457,13 +549,24 @@ defmodule CSSEx.Helpers.Output do
               end
 
             _ ->
-              [acc, selector, "{", attributes_to_list(attrs), "}"]
+              [
+                acc,
+                selector,
+                open_curly(opts),
+                attributes_to_list(attrs, opts),
+                close_curly(opts)
+              ]
           end
       end
     end)
   end
 
-  def fold_attributes_table(ets, %{c: c} = om, to_file) do
+  def fold_attributes_table(ets, %{c: _} = om, to_file),
+    do: fold_attributes_table(ets, om, to_file, [])
+
+  def fold_attributes_table(ets, %{c: c} = om, to_file, options) do
+    opts = Keyword.put(options, :indent, 4)
+
     Enum.reduce(0..c, :ok, fn
       n, :ok ->
         selector = Map.get(om, n)
@@ -476,12 +579,17 @@ defmodule CSSEx.Helpers.Output do
             :ok
 
           [{_, attrs}] ->
-            case attributes_to_list(attrs) do
+            case attributes_to_list(attrs, opts) do
               [] ->
                 :ok
 
               attrs_list ->
-                case IO.binwrite(to_file, [selector, "{", attrs_list, "}"]) do
+                case IO.binwrite(to_file, [
+                       selector,
+                       open_curly(opts),
+                       attrs_list,
+                       close_curly(opts)
+                     ]) do
                   :ok -> :ok
                   error -> error
                 end
@@ -490,7 +598,13 @@ defmodule CSSEx.Helpers.Output do
     end)
   end
 
-  def fold_mapped_table(ets, %{c: c} = om) do
+  def fold_mapped_table(ets, %{c: _} = om),
+    do: fold_mapped_table(ets, om, [])
+
+  def fold_mapped_table(ets, %{c: c} = om, options) when is_list(options) do
+    opts = Keyword.put(options, :indent, 8)
+    pp? = Keyword.get(options, :pretty_print?, false)
+
     Enum.reduce(0..c, [], fn n, acc ->
       selector = Map.get(om, n)
 
@@ -503,18 +617,31 @@ defmodule CSSEx.Helpers.Output do
             acc
             | [
                 selector,
-                "{",
+                open_curly(opts),
                 Enum.reduce(maps, [], fn {prop, attrs}, acc_1 ->
-                  [acc_1, prop, "{", attributes_to_list(attrs), "}"]
+                  [
+                    acc_1,
+                    add_indent(if(pp?, do: 4, else: 0)),
+                    prop,
+                    open_curly(opts),
+                    attributes_to_list(attrs, opts),
+                    close_curly(Keyword.put(opts, :curly_indent, 4))
+                  ]
                 end),
-                "}"
+                close_curly(opts)
               ]
           ]
       end
     end)
   end
 
-  def fold_mapped_table(ets, %{c: c} = om, to_file) do
+  def fold_mapped_table(ets, %{c: _} = om, to_file) when not is_list(to_file),
+    do: fold_mapped_table(ets, om, to_file, [])
+
+  def fold_mapped_table(ets, %{c: c} = om, to_file, options) when is_list(options) do
+    opts = Keyword.put(options, :indent, 8)
+    pp? = Keyword.get(options, :pretty_print?, false)
+
     Enum.reduce(0..c, :ok, fn
       n, :ok ->
         selector = Map.get(om, n)
@@ -528,11 +655,18 @@ defmodule CSSEx.Helpers.Output do
               to_file,
               [
                 selector,
-                "{",
+                open_curly(opts),
                 Enum.reduce(maps, [], fn {prop, attrs}, acc_1 ->
-                  [acc_1, prop, "{", attributes_to_list(attrs), "}"]
+                  [
+                    acc_1,
+                    add_indent(if(pp?, do: 4, else: 0)),
+                    prop,
+                    open_curly(opts),
+                    attributes_to_list(attrs, opts),
+                    close_curly(Keyword.put(opts, :curly_indent, 4))
+                  ]
                 end),
-                "}"
+                close_curly(opts)
               ]
             )
             |> case do
@@ -543,22 +677,33 @@ defmodule CSSEx.Helpers.Output do
     end)
   end
 
-  def fold_font_faces_table(ets) do
+  def fold_font_faces_table(ets, opts) do
     :ets.foldl(
       fn {_, attributes}, acc ->
-        [acc, "@font-face{", attributes_to_list(attributes), "}"]
+        [
+          acc,
+          "@font-face",
+          open_curly(opts),
+          attributes_to_list(attributes, Keyword.put(opts, :indent, 4)),
+          close_curly(opts)
+        ]
       end,
       [],
       ets
     )
   end
 
-  def fold_font_faces_table(ets, to_file) do
+  def fold_font_faces_table(ets, to_file, opts) do
     :ets.foldl(
       fn {_, attributes}, acc ->
         case acc == :ok do
           true ->
-            case IO.binwrite(to_file, ["@font-face{", attributes_to_list(attributes), "}"]) do
+            case IO.binwrite(to_file, [
+                   "@font-face",
+                   open_curly(opts),
+                   attributes_to_list(attributes, Keyword.put(opts, :indent, 4)),
+                   close_curly(opts)
+                 ]) do
               :ok -> :ok
               error -> error
             end
@@ -690,13 +835,54 @@ defmodule CSSEx.Helpers.Output do
     %CSSEx.Parser{data | keyframes_order_map: new_om}
   end
 
-  def attributes_to_list(attributes_map) do
+  def attributes_to_list(attributes_map, opts \\ [])
+
+  def attributes_to_list(attributes_map, opts) do
+    pp? = Keyword.get(opts, :pretty_print?)
+    indent = Keyword.get(opts, :indent)
+
     Enum.reduce(attributes_map, [], fn
+      {k, v}, [_ | _] = acc when pp? == true ->
+        [acc | [";\n", add_indent(indent), k, ": ", v]]
+
       {k, v}, [_ | _] = acc ->
         [acc | [";", k, ":", v]]
+
+      {k, v}, [] when pp? == true ->
+        [add_indent(indent), k, ": ", v]
 
       {k, v}, [] ->
         [k, ":", v]
     end)
   end
+
+  def open_curly(opts) do
+    case Keyword.get(opts, :pretty_print?) do
+      true -> " {\n"
+      _ -> "{"
+    end
+  end
+
+  def close_curly(opts) do
+    case Keyword.get(opts, :pretty_print?) do
+      true ->
+        case Keyword.get(opts, :curly_indent) do
+          n when is_integer(n) and n > 0 ->
+            "\n#{add_indent(n)}}\n\n"
+
+          _ ->
+            "\n}\n\n"
+        end
+
+      _ ->
+        "}"
+    end
+  end
+
+  def add_indent(n) when is_integer(n) and n > 0 do
+    String.duplicate(" ", n)
+  end
+
+  def add_indent(_),
+    do: ""
 end

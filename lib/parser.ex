@@ -75,7 +75,8 @@ defmodule CSSEx.Parser do
     order_map: %{c: 0},
     keyframes_order_map: %{c: 0},
     expandables: %{},
-    expandables_order_map: %{c: 0}
+    expandables_order_map: %{c: 0},
+    pretty_print?: false
   ]
 
   @white_space CSSEx.Helpers.WhiteSpace.code_points()
@@ -101,13 +102,13 @@ defmodule CSSEx.Parser do
           {:ok, %CSSEx.Parser{}, String.t()}
           | {:error, %CSSEx.Parser{error: String.t(), valid?: false}}
   def parse_file(base_path, file_path),
-    do: parse_file(nil, base_path, file_path, nil)
+    do: parse_file(nil, base_path, file_path, nil, pretty_print?: false)
 
   @spec parse_file(%CSSEx.Parser{} | String.t(), String.t(), String.t()) ::
           {:ok, %CSSEx.Parser{}, String.t() | []}
           | {:error, %CSSEx.Parser{error: String.t(), valid?: false}}
   def parse_file(%CSSEx.Parser{} = data, base_path, file_path),
-    do: parse_file(data, base_path, file_path, nil)
+    do: parse_file(data, base_path, file_path, nil, pretty_print?: false)
 
   @spec parse_file(
           %CSSEx.Parser{} | nil,
@@ -118,10 +119,28 @@ defmodule CSSEx.Parser do
           {:ok, %CSSEx.Parser{}, String.t() | []}
           | {:error, %CSSEx.Parser{error: String.t(), valid?: false}}
   def parse_file(base_path, file_path, parse_to_file),
-    do: parse_file(nil, base_path, file_path, parse_to_file)
+    do: parse_file(nil, base_path, file_path, parse_to_file, pretty_print?: false)
 
-  def parse_file(data, base_path, file_path, parse_to_file) do
-    {:ok, pid} = __MODULE__.start_link(data)
+  def parse_file(data, base_path, file_path, parse_to_file),
+    do: parse_file(data, base_path, file_path, parse_to_file, pretty_print?: false)
+
+  @spec parse_file(
+          %CSSEx.Parser{} | nil,
+          path :: String.t(),
+          file_path :: String.t(),
+          output_path :: String.t() | nil,
+          options :: [pretty_print?: boolean()]
+        ) ::
+          {:ok, %CSSEx.Parser{}, String.t() | []}
+          | {:error, %CSSEx.Parser{error: String.t(), valid?: false}}
+  def parse_file(data, base_path, file_path, parse_to_file, options) do
+    options =
+      case data do
+        nil -> options
+        %__MODULE__{} -> data
+      end
+
+    {:ok, pid} = __MODULE__.start_link(options)
     :gen_statem.call(pid, {:start_file, base_path, file_path, parse_to_file})
   end
 
@@ -135,14 +154,14 @@ defmodule CSSEx.Parser do
           {:ok, %CSSEx.Parser{valid?: true}, String.t() | []}
           | {:error, %CSSEx.Parser{error: String.t(), valid?: false}}
 
-  def parse(content), do: parse(nil, content, nil)
+  def parse(content), do: parse(nil, content, nil, pretty_print?: false)
 
   @spec parse(base_config :: %CSSEx.Parser{} | nil, content :: String.t() | charlist) ::
           {:ok, %CSSEx.Parser{valid?: true}, String.t() | []}
           | {:error, %CSSEx.Parser{error: String.t(), valid?: false}}
 
-  def parse(%__MODULE__{} = data, content), do: parse(data, content, nil)
-  def parse(content, file), do: parse(nil, content, file)
+  def parse(%__MODULE__{} = data, content), do: parse(data, content, nil, pretty_print?: false)
+  def parse(content, file), do: parse(nil, content, file, pretty_print?: false)
 
   @spec parse(
           base_config :: %CSSEx.Parser{} | nil,
@@ -153,10 +172,16 @@ defmodule CSSEx.Parser do
           | {:error, %CSSEx.Parser{error: String.t(), valid?: false}}
 
   def parse(data, content, parse_to_file) when is_binary(content),
-    do: parse(data, to_charlist(content), parse_to_file)
+    do: parse(data, to_charlist(content), parse_to_file, pretty_print?: false)
 
-  def parse(data, content, parse_to_file) do
-    {:ok, pid} = __MODULE__.start_link(data)
+  def parse(data, content, parse_to_file, options) do
+    options =
+      case data do
+        nil -> options
+        %__MODULE__{} -> data
+      end
+
+    {:ok, pid} = __MODULE__.start_link(options)
     :gen_statem.call(pid, {:start, content, parse_to_file})
   end
 
@@ -164,19 +189,26 @@ defmodule CSSEx.Parser do
   def callback_mode(), do: :handle_event_function
 
   @doc false
-  def start_link(nil) do
-    :gen_statem.start_link(__MODULE__, nil, [])
-  end
+  def start_link(opts \\ [])
 
   def start_link(%__MODULE__{} = starting_data) do
     :gen_statem.start_link(__MODULE__, starting_data, [])
   end
 
+  def start_link(opts) do
+    :gen_statem.start_link(__MODULE__, opts, [])
+  end
+
   @impl :gen_statem
-  def init(nil) do
+  def init(nil),
+    do: init([])
+
+  def init(options) when is_list(options) do
     table_ref = :ets.new(:base, [:public])
     table_font_face_ref = :ets.new(:font_face, [:public])
     table_keyframes_ref = :ets.new(:keyframes, [:public])
+
+    pretty_print? = Keyword.get(options, :pretty_print?, false)
 
     {:ok, :waiting,
      %__MODULE__{
@@ -185,7 +217,8 @@ defmodule CSSEx.Parser do
        column: 1,
        ets_fontface: table_font_face_ref,
        ets_keyframes: table_keyframes_ref,
-       source_pid: self()
+       source_pid: self(),
+       pretty_print?: pretty_print?
      }, [@timeout]}
   end
 
@@ -1520,7 +1553,10 @@ defmodule CSSEx.Parser do
   end
 
   @doc false
-  def validate_import(%{current_value: current_value, first_rule: true, imports: imports} = data) do
+  def validate_import(
+        %{current_value: current_value, first_rule: true, imports: imports, pretty_print: pp?} =
+          data
+      ) do
     {:ok, cval} =
       current_value
       |> IO.chardata_to_string()
@@ -1529,7 +1565,13 @@ defmodule CSSEx.Parser do
 
     no_quotes = String.trim(cval, "\"")
 
-    %{data | imports: [imports | ["@import", " ", cval, ";"]]}
+    terminator =
+      case pp? do
+        true -> ";\n"
+        _ -> ";"
+      end
+
+    %{data | imports: [imports | ["@import", " ", cval, terminator]]}
     |> add_to_dependencies(no_quotes)
   end
 
@@ -1654,7 +1696,8 @@ defmodule CSSEx.Parser do
           no_count: no_count,
           expandables: expandables,
           expandables_order_map: eom,
-          file_list: file_list
+          file_list: file_list,
+          pretty_print?: pp?
         } = data,
         ets \\ nil,
         prefix \\ nil
@@ -1694,7 +1737,8 @@ defmodule CSSEx.Parser do
       keyframes_order_map: keyframe_order_map,
       expandables: expandables,
       expandables_order_map: eom,
-      file_list: file_list
+      file_list: file_list,
+      pretty_print?: pp?
     }
   end
 

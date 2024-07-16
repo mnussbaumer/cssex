@@ -1,6 +1,7 @@
 defmodule CSSEx.Helpers.Expandable do
   import CSSEx.Parser, only: [close_current: 1, create_data_for_inner: 3]
   import CSSEx.Helpers.Interpolations, only: [maybe_replace_val: 2]
+  alias CSSEx.Helpers.Output
 
   @moduledoc false
 
@@ -44,15 +45,18 @@ defmodule CSSEx.Helpers.Expandable do
   end
 
   def add(
-        %{expandables: existing, expandables_order_map: %{c: c} = eom} = data,
+        %{expandables: existing, expandables_order_map: %{c: c} = eom, pretty_print?: pp?} = data,
         selector,
         %{ets: ets, order_map: om, media: media} = inner_data,
         expandable_content
       ) do
+    opts = [pretty_print?: pp?, indent: 4]
+    IO.inspect(options_set: opts)
+
     taken_base =
       case :ets.take(ets, [[selector]]) do
         [{_, base}] ->
-          CSSEx.Helpers.Output.attributes_to_list(base)
+          Output.attributes_to_list(base, opts)
 
         _ ->
           []
@@ -69,10 +73,16 @@ defmodule CSSEx.Helpers.Expandable do
               m_selector ->
                 case :ets.lookup(media_table, m_selector) do
                   [{[[^selector]], rules}] ->
-                    [n_acc, CSSEx.Helpers.Output.attributes_to_list(rules)]
+                    [n_acc, Output.attributes_to_list(rules, opts)]
 
                   [{n_selector, rules}] ->
-                    [n_acc, n_selector, "{", CSSEx.Helpers.Output.attributes_to_list(rules), "}"]
+                    [
+                      n_acc,
+                      n_selector,
+                      Output.open_curly(opts),
+                      Output.attributes_to_list(rules, opts),
+                      Output.close_curly(opts)
+                    ]
 
                   _ ->
                     n_acc
@@ -80,7 +90,7 @@ defmodule CSSEx.Helpers.Expandable do
             end
           end)
 
-        [acc, media_rule, "{", all_internals, "}"]
+        [acc, media_rule, Output.open_curly(opts), all_internals, Output.close_curly(opts)]
       end)
       |> IO.iodata_to_binary()
 
@@ -91,7 +101,7 @@ defmodule CSSEx.Helpers.Expandable do
 
     new_content =
       ets
-      |> CSSEx.Helpers.Output.fold_attributes_table(om)
+      |> Output.fold_attributes_table(om, opts)
       |> IO.iodata_to_binary()
       |> to_charlist()
 
