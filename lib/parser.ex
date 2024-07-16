@@ -174,6 +174,14 @@ defmodule CSSEx.Parser do
   def parse(data, content, parse_to_file) when is_binary(content),
     do: parse(data, to_charlist(content), parse_to_file, pretty_print?: false)
 
+  @spec parse(
+          base_config :: %CSSEx.Parser{} | nil,
+          content :: String.t() | charlist,
+          output_file :: String.t() | nil,
+          options :: [pretty_print?: boolean()]
+        ) ::
+          {:ok, %CSSEx.Parser{valid?: true}, String.t() | []}
+          | {:error, %CSSEx.Parser{error: String.t(), valid?: false}}
   def parse(data, content, parse_to_file, options) do
     options =
       case data do
