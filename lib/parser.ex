@@ -182,6 +182,10 @@ defmodule CSSEx.Parser do
         ) ::
           {:ok, %CSSEx.Parser{valid?: true}, String.t() | []}
           | {:error, %CSSEx.Parser{error: String.t(), valid?: false}}
+
+  def parse(data, content, parse_to_file, options) when is_binary(content),
+    do: parse(data, to_charlist(content), parse_to_file, options)
+
   def parse(data, content, parse_to_file, options) do
     options =
       case data do
@@ -1562,7 +1566,7 @@ defmodule CSSEx.Parser do
 
   @doc false
   def validate_import(
-        %{current_value: current_value, first_rule: true, imports: imports, pretty_print: pp?} =
+        %{current_value: current_value, first_rule: true, imports: imports, pretty_print?: pp?} =
           data
       ) do
     {:ok, cval} =

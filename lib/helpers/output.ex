@@ -6,7 +6,7 @@ defmodule CSSEx.Helpers.Output do
   defstruct [:data, :to_file, :temp_file, :file_path, valid?: true, acc: [], pretty_print?: false]
 
   def do_finish(%{to_file: nil, pretty_print?: pp?} = data) do
-    %__MODULE__{data: data, pretty_print?: pp? || true}
+    %__MODULE__{data: data, pretty_print?: pp?}
     |> finish()
   end
 
@@ -151,7 +151,7 @@ defmodule CSSEx.Helpers.Output do
           pretty_print?: pp?
         } = ctx
       ) do
-    %__MODULE__{ctx | acc: [acc, fold_font_faces_table(ets, pp?)]}
+    %__MODULE__{ctx | acc: [acc, fold_font_faces_table(ets, pretty_print?: pp?)]}
     |> maybe_add_formatting_new_line()
   end
 
@@ -677,7 +677,7 @@ defmodule CSSEx.Helpers.Output do
     end)
   end
 
-  def fold_font_faces_table(ets, opts) do
+  def fold_font_faces_table(ets, opts) when is_list(opts) do
     :ets.foldl(
       fn {_, attributes}, acc ->
         [
@@ -693,7 +693,7 @@ defmodule CSSEx.Helpers.Output do
     )
   end
 
-  def fold_font_faces_table(ets, to_file, opts) do
+  def fold_font_faces_table(ets, to_file, opts) when is_list(opts) do
     :ets.foldl(
       fn {_, attributes}, acc ->
         case acc == :ok do

@@ -51,7 +51,6 @@ defmodule CSSEx.Helpers.Expandable do
         expandable_content
       ) do
     opts = [pretty_print?: pp?, indent: 4]
-    IO.inspect(options_set: opts)
 
     taken_base =
       case :ets.take(ets, [[selector]]) do
