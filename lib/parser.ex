@@ -104,22 +104,29 @@ defmodule CSSEx.Parser do
   def parse_file(base_path, file_path),
     do: parse_file(nil, base_path, file_path, nil, pretty_print?: false)
 
-  @spec parse_file(%CSSEx.Parser{} | String.t(), String.t(), String.t()) ::
+  @spec parse_file(%CSSEx.Parser{} | String.t(), String.t(), String.t() | Keyword.t()) ::
           {:ok, %CSSEx.Parser{}, String.t() | []}
           | {:error, %CSSEx.Parser{error: String.t(), valid?: false}}
+
   def parse_file(%CSSEx.Parser{} = data, base_path, file_path),
     do: parse_file(data, base_path, file_path, nil, pretty_print?: false)
 
+  def parse_file(base_path, file_path, options) when is_list(options),
+    do: parse_file(nil, base_path, file_path, nil, options)
+
+  def parse_file(base_path, file_path, parse_to_file),
+    do: parse_file(nil, base_path, file_path, parse_to_file, pretty_print?: false)
+
   @spec parse_file(
-          %CSSEx.Parser{} | nil,
+          %CSSEx.Parser{} | nil | String.t(),
           path :: String.t(),
           file_path :: String.t(),
-          output_path :: String.t() | nil
+          output_path :: String.t() | nil | Keyword.t()
         ) ::
           {:ok, %CSSEx.Parser{}, String.t() | []}
           | {:error, %CSSEx.Parser{error: String.t(), valid?: false}}
-  def parse_file(base_path, file_path, parse_to_file),
-    do: parse_file(nil, base_path, file_path, parse_to_file, pretty_print?: false)
+  def parse_file(base_path, file_path, parse_to_file, options) when is_list(options),
+    do: parse_file(nil, base_path, file_path, parse_to_file, options)
 
   def parse_file(data, base_path, file_path, parse_to_file),
     do: parse_file(data, base_path, file_path, parse_to_file, pretty_print?: false)
@@ -156,11 +163,18 @@ defmodule CSSEx.Parser do
 
   def parse(content), do: parse(nil, content, nil, pretty_print?: false)
 
-  @spec parse(base_config :: %CSSEx.Parser{} | nil, content :: String.t() | charlist) ::
+  @spec parse(
+          base_config_or_content :: %CSSEx.Parser{} | nil | String.t(),
+          content_or_options :: String.t() | charlist | Keyword.t()
+        ) ::
           {:ok, %CSSEx.Parser{valid?: true}, String.t() | []}
           | {:error, %CSSEx.Parser{error: String.t(), valid?: false}}
 
   def parse(%__MODULE__{} = data, content), do: parse(data, content, nil, pretty_print?: false)
+
+  def parse(content, options) when is_binary(content) and is_list(options),
+    do: parse(nil, content, nil, options)
+
   def parse(content, file), do: parse(nil, content, file, pretty_print?: false)
 
   @spec parse(
@@ -211,6 +225,8 @@ defmodule CSSEx.Parser do
     :gen_statem.start_link(__MODULE__, opts, [])
   end
 
+  @valid_options [:pretty_print?]
+
   @impl :gen_statem
   def init(nil),
     do: init([])
@@ -220,18 +236,32 @@ defmodule CSSEx.Parser do
     table_font_face_ref = :ets.new(:font_face, [:public])
     table_keyframes_ref = :ets.new(:keyframes, [:public])
 
-    pretty_print? = Keyword.get(options, :pretty_print?, false)
+    %{pretty_print?: pretty_print?} =
+      Enum.reduce(@valid_options, %{}, fn key, acc ->
+        Map.put(acc, key, Keyword.get(options, key, false))
+      end)
 
-    {:ok, :waiting,
-     %__MODULE__{
-       ets: table_ref,
-       line: 1,
-       column: 1,
-       ets_fontface: table_font_face_ref,
-       ets_keyframes: table_keyframes_ref,
-       source_pid: self(),
-       pretty_print?: pretty_print?
-     }, [@timeout]}
+    case Enum.reduce(options, [], fn {option, _}, acc ->
+           case option in @valid_options do
+             true -> acc
+             _ -> [option | acc]
+           end
+         end) do
+      [_ | _] = options ->
+        {:stop, {:invalid_options, options}}
+
+      _ ->
+        {:ok, :waiting,
+         %__MODULE__{
+           ets: table_ref,
+           line: 1,
+           column: 1,
+           ets_fontface: table_font_face_ref,
+           ets_keyframes: table_keyframes_ref,
+           source_pid: self(),
+           pretty_print?: pretty_print?
+         }, [@timeout]}
+    end
   end
 
   def init(%__MODULE__{} = starting_data) do

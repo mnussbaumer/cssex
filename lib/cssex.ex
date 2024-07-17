@@ -189,7 +189,7 @@ defmodule CSSEx do
 
       %CSSEx.Parser{valid?: true, warnings: warnings, file: file} ->
         Enum.each(warnings, fn warning ->
-          Logger.warn("CSSEx warning when processing #{file} ::\n\n #{warning}\n")
+          Logger.warning("CSSEx warning when processing #{file} ::\n\n #{warning}\n")
         end)
 
         {:keep_state_and_data, [{:next_event, :internal, :set_status}]}
