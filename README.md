@@ -9,8 +9,8 @@ Its main purpose is to provide a native Elixir pre-processor for CSS, in the vei
      <a href="#installation">Installation</a><span>&nbsp; |</span>
      <a href="#usage">Usage</a><span>&nbsp; |</span>
      <a href="#tasks">Tasks</a><span>&nbsp; |</span>
+     <a href="#dynamic">Dynamic/RunTime parsing</a><span>&nbsp; |</span>
      <a href="#internals">Internals</a><span>&nbsp; |</span>
-     <a href="#roadmap">Roadmap</a><span>&nbsp; |</span>
      <a href="#about">About</a><span>&nbsp; |</span>
      <a href="#copyright">Copyright</a>
 </div>
@@ -377,7 +377,7 @@ container .class-1 {
 }
 
 .class-3:hover {
-  color:rgba(0,204,0,1.0)
+  color:rgba(0,0,204,1.0)
 }
 
 container .class-3 {
@@ -638,7 +638,7 @@ Use as `@fn::lighten(blue, 10)`
 Use as `@fn::darken(blue, 10)`
 
 - `@fn::opacity(color, 0_to_1)`
-Use as `@fn::lighten(blue, 0.2)`
+Use as `@fn::opacity(blue, 0.2)`
 
 Notice they don't take units, and opacity needs a well formed float, e.g. 0.4.
 
@@ -874,7 +874,7 @@ To install from `hex.pm` use:
 
 defp deps do
      [
-        {:cssex, "~> 0.6"}
+        {:cssex, "~> 1.0"}
      ]
 end
 ```
@@ -896,7 +896,9 @@ config :yourapp_web, CSSEx,
   ]
 ```
 
-This is usually the case if you want to integrate with Webpack, this will output the resulting css file and your webpack can just then use `app.css` as regularly.
+You can also configure CSSEx to pretty print the css, with `pretty_print?: true` on the config.
+
+This is usually the case if you want to integrate with Webpack, or esbuild, this will output the resulting css file and webpack/esbuild can just then use `app.css` as regularly.
 You can specify as many entry points as wanted.
 
 If you are using the priv folder directly you can simply use it as:
@@ -988,6 +990,25 @@ mix cssex.parser --c yourapp_web
 mix cssex.parser --e path/to/file.cssex=path/to/output.css
 ```
 
+<div id="dynamic"></div>
+
+## Dynamic/RunTime parsing
+
+You can parse a file or a string of CSS syntax by using directly the functions in CSSEx.Parser. For instance, to parse a file you can use:
+
+`CSSEx.Parser.parse_file("/base/path", "/base/path/file.css")`
+You need to pass both the folder path and the file path independently.
+
+You can also pass `pretty_print?` option by using `CSSEx.Parser.parse_file("/base/path", "/base/path/file.css", pretty_print?: true)`
+
+If you want to write directly to a file call it instead as:
+`CSSEx.Parser.parse_file("/base/path", "/base/path/file.css", "/output/path.css", pretty_print?: true)`
+
+You can do the same to parse directly a string containing CSS syntax:
+`CSSEx.Parser.parse("div{color:white;}", pretty_print?: true)`
+
+Again, refer to the parser file to see the syntax details.
+
 <div id="internals"></div>
 
 ## Internals
@@ -997,14 +1018,6 @@ Right now the library is mostly for use as regular pre-processor with a syntax t
 None of this is yet implemented in the form of a consistent api nor totally defined, but if you have a use case for any of those open an issue to discuss.
 
 Other than that check the parser.ex to see how you can start an individual parser that can write to a file or return a binary with the result of the parsing.
-
-<div id="roadmap"></div>
-
-## Roadmap
-
-- Additional functionality related with dynamic generation and visualisation of CSS in a structured format. This is mostly for use cases outside of pure pre-processing and more to do with tree-shaking, automatic vendor-prefixing, searchable CSS definitions, etc.
-
-<div id="about"></div>
 
 ## About
 
