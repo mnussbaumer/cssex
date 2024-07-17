@@ -377,7 +377,7 @@ container .class-1 {
 }
 
 .class-3:hover {
-  color:rgba(0,204,0,1.0)
+  color:rgba(0,0,204,1.0)
 }
 
 container .class-3 {
@@ -638,7 +638,7 @@ Use as `@fn::lighten(blue, 10)`
 Use as `@fn::darken(blue, 10)`
 
 - `@fn::opacity(color, 0_to_1)`
-Use as `@fn::lighten(blue, 0.2)`
+Use as `@fn::opacity(blue, 0.2)`
 
 Notice they don't take units, and opacity needs a well formed float, e.g. 0.4.
 
