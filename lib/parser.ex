@@ -306,7 +306,7 @@ defmodule CSSEx.Parser do
             }
 
             {:next_state, {:parse, :next}, new_data,
-             [{:next_event, :internal, {:parse, IO.read(device, :all)}}]}
+             [{:next_event, :internal, {:parse, IO.read(device, :eof)}}]}
 
           {:error, :enoent} ->
             file_errored =
@@ -1618,7 +1618,7 @@ defmodule CSSEx.Parser do
   end
 
   def validate_import(%{first_rule: false} = data),
-    do: add_warning(data, warning_msg(:import_declaration))
+    do: add_warning(data, warning_msg(:import_position))
 
   @doc false
   def first_rule(%{first_rule: false} = data), do: data
