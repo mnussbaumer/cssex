@@ -141,7 +141,12 @@ defmodule CSSEx.Task.Test do
     dest_path: dest_path
   } do
     assert capture_log(fn ->
-             Mix.Tasks.Cssex.Parser.run(["--e", "#{base_without}=#{dest_without}", "--a", "cssex"])
+             Mix.Tasks.Cssex.Parser.run([
+               "--e",
+               "#{base_without}=#{dest_without}",
+               "--a",
+               "cssex"
+             ])
            end) =~ "PROCESSED :: #{base_path} into \"#{dest_path}"
 
     assert {:ok, "div.test{color:red}\n"} = File.read(dest_path)
