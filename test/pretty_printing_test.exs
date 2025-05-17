@@ -75,9 +75,6 @@ defmodule CSSEx.PrettyPrinting.Test do
   end
 
   test "parsing content with pretty print without file" do
-    assert output =
-             Parser.parse(@source, pretty_print?: true)
-
     assert {:ok, _, @output} =
              Parser.parse(@source, pretty_print?: true)
   end

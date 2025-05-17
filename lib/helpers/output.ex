@@ -462,8 +462,6 @@ defmodule CSSEx.Helpers.Output do
           {:cont, :ok}
 
         folded ->
-          IO.inspect(folded: folded, rule: rule)
-
           case IO.binwrite(to_file, [
                  rule,
                  open_curly(opts),
